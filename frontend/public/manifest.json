@@ -1,0 +1,8 @@
+{
+  "short_name": "Lambert Inspection",
+  "name": "Lambert Electromec Inspection Platform",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff"
+}
