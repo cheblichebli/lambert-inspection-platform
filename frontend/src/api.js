@@ -255,6 +255,16 @@ export const usersAPI = {
     return response.data;
   },
 
+  delete: async (id) => {
+    const response = await api.delete(`/users/${id}`);
+    return response.data;
+  },
+
+  changePassword: async (id, newPassword) => {
+    const response = await api.put(`/users/${id}/password`, { newPassword });
+    return response.data;
+  },
+
   getProfile: async () => {
     const response = await api.get('/users/me');
     return response.data;
