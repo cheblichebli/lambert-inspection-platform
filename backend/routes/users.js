@@ -92,4 +92,63 @@ router.get('/me', authenticateToken, async (req, res) => {
   }
 });
 
+// Change user password (Admin only)
+router.put('/:id/password', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+  const { id } = req.params;
+  const { newPassword } = req.body;
+  const pool = req.app.get('db');
+
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    
+    const result = await pool.query(
+      `UPDATE users 
+       SET password_hash = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING id, email, full_name`,
+      [hashedPassword, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ message: 'Password updated successfully', user: result.rows[0] });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// Delete user (Admin only)
+router.delete('/:id', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+  const { id } = req.params;
+  const pool = req.app.get('db');
+
+  // Prevent deleting yourself
+  if (parseInt(id) === req.user.id) {
+    return res.status(400).json({ error: 'Cannot delete your own account' });
+  }
+
+  try {
+    const result = await pool.query(
+      'DELETE FROM users WHERE id = $1 RETURNING id, email',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ message: 'User deleted successfully', user: result.rows[0] });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 module.exports = router;
