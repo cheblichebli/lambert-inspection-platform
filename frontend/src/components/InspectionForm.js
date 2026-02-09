@@ -1,482 +1,340 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { formsAPI, inspectionsAPI } from '../api';
-import { Camera, X, Upload, Save, Send } from 'lucide-react';
+const express = require('express');
+const { authenticateToken, authorizeRoles } = require('../middleware/auth');
+const { v4: uuidv4 } = require('uuid');
+const router = express.Router();
 
-const InspectionForm = ({ user }) => {
-  const navigate = useNavigate();
-  const [forms, setForms] = useState([]);
-  const [selectedFormId, setSelectedFormId] = useState('');
-  const [selectedForm, setSelectedForm] = useState(null);
-  const [formData, setFormData] = useState({});
-  const [photos, setPhotos] = useState([]);
-  const [location, setLocation] = useState('');
-  const [equipmentId, setEquipmentId] = useState('');
-  const [notes, setNotes] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
-  const [error, setError] = useState('');
+// Get all inspections
+router.get('/', authenticateToken, async (req, res) => {
+  const pool = req.app.get('db');
+  const { status, templateId, inspectorId } = req.query;
   
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
-
-  useEffect(() => {
-    loadForms();
-  }, []);
-
-  useEffect(() => {
-    if (selectedFormId) {
-      loadFormTemplate();
-    }
-  }, [selectedFormId]);
-
-  const loadForms = async () => {
-    try {
-      const data = await formsAPI.getAll(null, true);
-      setForms(data);
-      if (data.length > 0 && !selectedFormId) {
-        setSelectedFormId(data[0].id.toString());
-      }
-    } catch (error) {
-      console.error('Error loading forms:', error);
-      setError('Failed to load form templates');
-    }
-  };
-
-  const loadFormTemplate = async () => {
-    try {
-      const form = await formsAPI.getById(selectedFormId);
-      setSelectedForm(form);
-      
-      // Initialize form data
-      const fields = typeof form.fields === 'string' ? JSON.parse(form.fields) : form.fields;
-      const initialData = {};
-      fields.forEach(field => {
-        initialData[field.id] = field.type === 'checkbox' ? false : '';
-      });
-      setFormData(initialData);
-    } catch (error) {
-      console.error('Error loading form template:', error);
-      setError('Failed to load form template');
-    }
-  };
-
-  const handleFieldChange = (fieldId, value) => {
-    setFormData(prev => ({ ...prev, [fieldId]: value }));
-  };
-
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' },
-        audio: false 
-      });
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        setShowCamera(true);
-      }
-    } catch (error) {
-      console.error('Error accessing camera:', error);
-      setError('Cannot access camera. Please check permissions.');
-    }
-  };
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    setShowCamera(false);
-  };
-
-  const capturePhoto = () => {
-    if (photos.length >= 5) {
-      setError('Maximum 5 photos allowed per inspection');
-      return;
-    }
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
+  try {
+    let query = `
+      SELECT i.*, 
+             ft.title as template_title,
+             u1.full_name as inspector_name,
+             u2.full_name as reviewer_name,
+             (SELECT COUNT(*) FROM inspection_photos WHERE inspection_id = i.id) as photo_count
+      FROM inspections i
+      LEFT JOIN form_templates ft ON i.template_id = ft.id
+      LEFT JOIN users u1 ON i.inspector_id = u1.id
+      LEFT JOIN users u2 ON i.reviewed_by = u2.id
+      WHERE 1=1
+    `;
+    const params = [];
     
-    if (video && canvas) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0);
-      
-      const photoData = canvas.toDataURL('image/jpeg', 0.8);
-      setPhotos(prev => [...prev, { data: photoData, caption: '' }]);
-      stopCamera();
+    // Inspectors can only see their own inspections
+    if (req.user.role === 'inspector') {
+      params.push(req.user.id);
+      query += ` AND i.inspector_id = $${params.length}`;
+    } else if (inspectorId) {
+      params.push(inspectorId);
+      query += ` AND i.inspector_id = $${params.length}`;
     }
-  };
-
-  const removePhoto = (index) => {
-    setPhotos(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (photos.length >= 5) {
-      setError('Maximum 5 photos allowed per inspection');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPhotos(prev => [...prev, { data: reader.result, caption: '' }]);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const validateForm = () => {
-    if (!selectedForm) {
-      setError('Please select a form template');
-      return false;
-    }
-
-    const fields = typeof selectedForm.fields === 'string' 
-      ? JSON.parse(selectedForm.fields) 
-      : selectedForm.fields;
     
-    for (const field of fields) {
-      if (field.required && !formData[field.id]) {
-        setError(`${field.label} is required`);
-        return false;
+    if (status) {
+      params.push(status);
+      query += ` AND i.status = $${params.length}`;
+    }
+    
+    if (templateId) {
+      params.push(templateId);
+      query += ` AND i.template_id = $${params.length}`;
+    }
+    
+    query += ' ORDER BY i.created_at DESC';
+    
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get inspections error:', error);
+    res.status(500).json({ error: 'Failed to fetch inspections' });
+  }
+});
+
+// Get single inspection with photos
+router.get('/:id', authenticateToken, async (req, res) => {
+  const pool = req.app.get('db');
+  const { id } = req.params;
+  
+  try {
+    // Get inspection
+    const inspectionResult = await pool.query(
+      `SELECT i.*, 
+              ft.title as template_title,
+              ft.fields as template_fields,
+              u1.full_name as inspector_name,
+              u2.full_name as reviewer_name
+       FROM inspections i
+       LEFT JOIN form_templates ft ON i.template_id = ft.id
+       LEFT JOIN users u1 ON i.inspector_id = u1.id
+       LEFT JOIN users u2 ON i.reviewed_by = u2.id
+       WHERE i.id = $1`,
+      [id]
+    );
+
+    if (inspectionResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Inspection not found' });
+    }
+
+    // Check permissions
+    const inspection = inspectionResult.rows[0];
+    if (req.user.role === 'inspector' && inspection.inspector_id !== req.user.id) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    // Get photos
+    const photosResult = await pool.query(
+      `SELECT id, caption, sequence_order, photo_data, created_at
+       FROM inspection_photos
+       WHERE inspection_id = $1
+       ORDER BY sequence_order`,
+      [id]
+    );
+
+    inspection.photos = photosResult.rows;
+    res.json(inspection);
+  } catch (error) {
+    console.error('Get inspection error:', error);
+    res.status(500).json({ error: 'Failed to fetch inspection' });
+  }
+});
+
+// Create inspection
+router.post('/', authenticateToken, async (req, res) => {
+  const pool = req.app.get('db');
+  const { 
+    templateId, 
+    data, 
+    location, 
+    equipmentId, 
+    notes, 
+    photos, 
+    status = 'draft',
+    gpsLatitude,
+    gpsLongitude,
+    gpsAccuracy,
+    inspectorSignature,
+    scannedCodes
+  } = req.body;
+  
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+
+    // No photo limit - unlimited photos allowed
+    const syncId = uuidv4();
+    
+    // Create inspection
+    const inspectionResult = await client.query(
+      `INSERT INTO inspections 
+       (template_id, inspector_id, status, data, location, equipment_id, notes, sync_id, 
+        submitted_at, offline_created, gps_latitude, gps_longitude, gps_accuracy, gps_timestamp,
+        inspector_signature, signature_timestamp, scanned_codes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       RETURNING *`,
+      [
+        templateId, 
+        req.user.id, 
+        status, 
+        JSON.stringify(data), 
+        location, 
+        equipmentId, 
+        notes, 
+        syncId,
+        status === 'submitted' ? new Date() : null,
+        false,
+        gpsLatitude || null,
+        gpsLongitude || null,
+        gpsAccuracy || null,
+        (gpsLatitude && gpsLongitude) ? new Date() : null,
+        inspectorSignature || null,
+        inspectorSignature ? new Date() : null,
+        JSON.stringify(scannedCodes || [])
+      ]
+    );
+
+    const inspection = inspectionResult.rows[0];
+
+    // Add photos if provided
+    if (photos && photos.length > 0) {
+      for (let i = 0; i < photos.length; i++) {
+        const photo = photos[i];
+        await client.query(
+          `INSERT INTO inspection_photos 
+           (inspection_id, photo_data, caption, sequence_order, sync_id)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [inspection.id, photo.data, photo.caption || '', i, uuidv4()]
+        );
       }
     }
 
-    return true;
-  };
+    await client.query('COMMIT');
+    res.status(201).json(inspection);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Create inspection error:', error);
+    res.status(500).json({ error: error.message || 'Failed to create inspection' });
+  } finally {
+    client.release();
+  }
+});
 
-  const handleSubmit = async (status = 'draft') => {
-    setError('');
+// Update inspection
+router.put('/:id', authenticateToken, async (req, res) => {
+  const pool = req.app.get('db');
+  const { id } = req.params;
+  const { 
+    data, 
+    location, 
+    equipmentId, 
+    notes, 
+    status,
+    gpsLatitude,
+    gpsLongitude,
+    gpsAccuracy,
+    inspectorSignature,
+    scannedCodes
+  } = req.body;
+  
+  try {
+    // Check if inspection exists and user has permission
+    const checkResult = await pool.query(
+      'SELECT inspector_id, status FROM inspections WHERE id = $1',
+      [id]
+    );
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Inspection not found' });
+    }
+
+    const inspection = checkResult.rows[0];
     
-    if (!validateForm()) {
-      return;
+    // Only inspector can edit their own draft inspections
+    if (req.user.role === 'inspector' && 
+        (inspection.inspector_id !== req.user.id || inspection.status !== 'draft')) {
+      return res.status(403).json({ error: 'Cannot edit this inspection' });
     }
 
-    setLoading(true);
+    const result = await pool.query(
+      `UPDATE inspections
+       SET data = $1, location = $2, equipment_id = $3, notes = $4, 
+           status = $5, updated_at = CURRENT_TIMESTAMP,
+           submitted_at = CASE WHEN $5 = 'submitted' THEN CURRENT_TIMESTAMP ELSE submitted_at END,
+           gps_latitude = COALESCE($7, gps_latitude),
+           gps_longitude = COALESCE($8, gps_longitude),
+           gps_accuracy = COALESCE($9, gps_accuracy),
+           gps_timestamp = CASE WHEN $7 IS NOT NULL AND $8 IS NOT NULL THEN CURRENT_TIMESTAMP ELSE gps_timestamp END,
+           inspector_signature = COALESCE($10, inspector_signature),
+           signature_timestamp = CASE WHEN $10 IS NOT NULL THEN CURRENT_TIMESTAMP ELSE signature_timestamp END,
+           scanned_codes = COALESCE($11, scanned_codes)
+       WHERE id = $6
+       RETURNING *`,
+      [
+        JSON.stringify(data), 
+        location, 
+        equipmentId, 
+        notes, 
+        status || inspection.status, 
+        id,
+        gpsLatitude,
+        gpsLongitude,
+        gpsAccuracy,
+        inspectorSignature,
+        scannedCodes ? JSON.stringify(scannedCodes) : null
+      ]
+    );
 
-    try {
-      const inspectionData = {
-        templateId: parseInt(selectedFormId),
-        data: formData,
-        location,
-        equipmentId,
-        notes,
-        photos,
-        status
-      };
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Update inspection error:', error);
+    res.status(500).json({ error: 'Failed to update inspection' });
+  }
+});
 
-      await inspectionsAPI.create(inspectionData);
-      
-      alert(
-        status === 'submitted' 
-          ? 'Inspection submitted successfully!' 
-          : 'Inspection saved as draft'
-      );
-      navigate('/inspections');
-    } catch (error) {
-      console.error('Error saving inspection:', error);
-      setError(error.message || 'Failed to save inspection');
-    } finally {
-      setLoading(false);
+// Review inspection (Supervisor/Admin only)
+router.post('/:id/review', authenticateToken, authorizeRoles('supervisor', 'admin'), async (req, res) => {
+  const pool = req.app.get('db');
+  const { id } = req.params;
+  const { status, comments, supervisorSignature } = req.body;
+  
+  if (!['approved', 'rejected'].includes(status)) {
+    return res.status(400).json({ error: 'Status must be approved or rejected' });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE inspections
+       SET status = $1, review_comments = $2, reviewed_by = $3, 
+           reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP,
+           supervisor_signature = $5
+       WHERE id = $4 AND status = 'submitted'
+       RETURNING *`,
+      [status, comments, req.user.id, id, supervisorSignature || null]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Inspection not found or not submitted' });
     }
-  };
 
-  const renderField = (field) => {
-    switch (field.type) {
-      case 'text':
-        return (
-          <input
-            type="text"
-            value={formData[field.id] || ''}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
-            placeholder={field.placeholder || ''}
-            required={field.required}
-            className="form-control"
-          />
-        );
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Review inspection error:', error);
+    res.status(500).json({ error: 'Failed to review inspection' });
+  }
+});
 
-      case 'number':
-        return (
-          <input
-            type="number"
-            value={formData[field.id] || ''}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
-            placeholder={field.placeholder || ''}
-            required={field.required}
-            className="form-control"
-          />
-        );
-
-      case 'textarea':
-        return (
-          <textarea
-            value={formData[field.id] || ''}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
-            placeholder={field.placeholder || ''}
-            required={field.required}
-            rows={4}
-            className="form-control"
-          />
-        );
-
-      case 'select':
-        return (
-          <select
-            value={formData[field.id] || ''}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
-            required={field.required}
-            className="form-control"
-          >
-            <option value="">Select...</option>
-            {field.options?.map((option, idx) => (
-              <option key={idx} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        );
-
-      case 'checkbox':
-        return (
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={formData[field.id] || false}
-              onChange={(e) => handleFieldChange(field.id, e.target.checked)}
-              required={field.required}
-            />
-            <span>{field.label}</span>
-          </label>
-        );
-
-      case 'radio':
-        return (
-          <div className="radio-group">
-            {field.options?.map((option, idx) => (
-              <label key={idx} className="radio-label">
-                <input
-                  type="radio"
-                  name={field.id}
-                  value={option}
-                  checked={formData[field.id] === option}
-                  onChange={(e) => handleFieldChange(field.id, e.target.value)}
-                  required={field.required}
-                />
-                <span>{option}</span>
-              </label>
-            ))}
-          </div>
-        );
-
-      case 'date':
-        return (
-          <input
-            type="date"
-            value={formData[field.id] || ''}
-            onChange={(e) => handleFieldChange(field.id, e.target.value)}
-            required={field.required}
-            className="form-control"
-          />
-        );
-
-      default:
-        return <p className="text-muted">Unsupported field type</p>;
+// Delete inspection (own draft only, or admin)
+router.delete('/:id', authenticateToken, async (req, res) => {
+  const pool = req.app.get('db');
+  const { id } = req.params;
+  
+  try {
+    let query = 'DELETE FROM inspections WHERE id = $1';
+    const params = [id];
+    
+    // Inspectors can only delete their own drafts
+    if (req.user.role === 'inspector') {
+      query += ' AND inspector_id = $2 AND status = $3';
+      params.push(req.user.id, 'draft');
     }
-  };
+    
+    query += ' RETURNING id';
+    
+    const result = await pool.query(query, params);
 
-  return (
-    <div className="inspection-form-page">
-      <div className="page-header">
-        <h1>New Inspection</h1>
-      </div>
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Inspection not found or cannot be deleted' });
+    }
 
-      {error && (
-        <div className="alert alert-error">
-          {error}
-          <button onClick={() => setError('')} className="btn-close">×</button>
-        </div>
-      )}
+    res.json({ message: 'Inspection deleted successfully' });
+  } catch (error) {
+    console.error('Delete inspection error:', error);
+    res.status(500).json({ error: 'Failed to delete inspection' });
+  }
+});
 
-      <div className="form-container">
-        <div className="form-section">
-          <h2>Select Form Template</h2>
-          <select
-            value={selectedFormId}
-            onChange={(e) => setSelectedFormId(e.target.value)}
-            className="form-control"
-            disabled={loading}
-          >
-            {forms.map(form => (
-              <option key={form.id} value={form.id}>
-                {form.title} ({form.category})
-              </option>
-            ))}
-          </select>
-        </div>
+// Get inspection statistics
+router.get('/stats/summary', authenticateToken, authorizeRoles('supervisor', 'admin'), async (req, res) => {
+  const pool = req.app.get('db');
+  
+  try {
+    const result = await pool.query(`
+      SELECT 
+        COUNT(*) FILTER (WHERE status = 'draft') as draft_count,
+        COUNT(*) FILTER (WHERE status = 'submitted') as submitted_count,
+        COUNT(*) FILTER (WHERE status = 'approved') as approved_count,
+        COUNT(*) FILTER (WHERE status = 'rejected') as rejected_count,
+        COUNT(*) as total_count
+      FROM inspections
+    `);
 
-        {selectedForm && (
-          <>
-            <div className="form-section">
-              <h2>Inspection Details</h2>
-              <div className="form-grid">
-                <div className="form-group">
-                  <label>Location</label>
-                  <input
-                    type="text"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    placeholder="e.g., Building A, Floor 3"
-                    className="form-control"
-                  />
-                </div>
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Get stats error:', error);
+    res.status(500).json({ error: 'Failed to fetch statistics' });
+  }
+});
 
-                <div className="form-group">
-                  <label>Equipment ID</label>
-                  <input
-                    type="text"
-                    value={equipmentId}
-                    onChange={(e) => setEquipmentId(e.target.value)}
-                    placeholder="e.g., EQ-001"
-                    className="form-control"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="form-section">
-              <h2>Inspection Form</h2>
-              {(typeof selectedForm.fields === 'string' 
-                ? JSON.parse(selectedForm.fields) 
-                : selectedForm.fields
-              ).map((field) => (
-                <div key={field.id} className="form-group">
-                  {field.type !== 'checkbox' && (
-                    <label>
-                      {field.label}
-                      {field.required && <span className="required">*</span>}
-                    </label>
-                  )}
-                  {renderField(field)}
-                </div>
-              ))}
-            </div>
-
-            <div className="form-section">
-              <h2>Photos ({photos.length}/5)</h2>
-              <div className="photo-controls">
-                <button
-                  type="button"
-                  onClick={startCamera}
-                  className="btn btn-secondary"
-                  disabled={photos.length >= 5 || showCamera}
-                >
-                  <Camera size={20} />
-                  Take Photo
-                </button>
-
-                <label className="btn btn-secondary">
-                  <Upload size={20} />
-                  Upload Photo
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    style={{ display: 'none' }}
-                    disabled={photos.length >= 5}
-                  />
-                </label>
-              </div>
-
-              {showCamera && (
-                <div className="camera-container">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    className="camera-preview"
-                  />
-                  <div className="camera-controls">
-                    <button onClick={capturePhoto} className="btn btn-primary">
-                      Capture
-                    </button>
-                    <button onClick={stopCamera} className="btn btn-secondary">
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              <canvas ref={canvasRef} style={{ display: 'none' }} />
-
-              <div className="photos-grid">
-                {photos.map((photo, index) => (
-                  <div key={index} className="photo-item">
-                    <img src={photo.data} alt={`Photo ${index + 1}`} />
-                    <button
-                      onClick={() => removePhoto(index)}
-                      className="btn-remove"
-                    >
-                      <X size={16} />
-                    </button>
-                    <input
-                      type="text"
-                      value={photo.caption}
-                      onChange={(e) => {
-                        const newPhotos = [...photos];
-                        newPhotos[index].caption = e.target.value;
-                        setPhotos(newPhotos);
-                      }}
-                      placeholder="Add caption..."
-                      className="photo-caption"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="form-section">
-              <h2>Additional Notes</h2>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Any additional notes or observations..."
-                rows={4}
-                className="form-control"
-              />
-            </div>
-
-            <div className="form-actions">
-              <button
-                onClick={() => handleSubmit('draft')}
-                className="btn btn-secondary"
-                disabled={loading}
-              >
-                <Save size={20} />
-                Save Draft
-              </button>
-
-              <button
-                onClick={() => handleSubmit('submitted')}
-                className="btn btn-primary"
-                disabled={loading}
-              >
-                <Send size={20} />
-                {loading ? 'Submitting...' : 'Submit Inspection'}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default InspectionForm;
+module.exports = router;
