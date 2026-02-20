@@ -292,6 +292,81 @@ const InspectionForm = ({ user }) => {
           />
         );
 
+      case 'photo':
+        return (
+          <div className="inline-photo-field">
+            <div className="photo-controls">
+              <button
+                type="button"
+                onClick={() => {
+                  // Use existing startCamera function
+                  startCamera();
+                  // Store which field this photo is for
+                  sessionStorage.setItem('currentPhotoFieldId', field.id);
+                }}
+                className="btn btn-secondary"
+                disabled={showCamera}
+              >
+                <Camera size={20} />
+                Take Photo
+              </button>
+
+              <label className="btn btn-secondary">
+                <Upload size={20} />
+                Upload Photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files);
+                    files.forEach(file => {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        const currentPhotos = formData[field.id] || [];
+                        handleFieldChange(field.id, [
+                          ...currentPhotos,
+                          { data: reader.result, caption: '' }
+                        ]);
+                      };
+                      reader.readAsDataURL(file);
+                    });
+                  }}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            </div>
+
+            {/* Display photos for this field */}
+            <div className="inline-photos-grid">
+              {(formData[field.id] || []).map((photo, photoIndex) => (
+                <div key={photoIndex} className="photo-item">
+                  <img src={photo.data} alt={`Photo ${photoIndex + 1}`} />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const currentPhotos = formData[field.id] || [];
+                      handleFieldChange(
+                        field.id,
+                        currentPhotos.filter((_, i) => i !== photoIndex)
+                      );
+                    }}
+                    className="remove-photo"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {(formData[field.id] || []).length === 0 && (
+              <p style={{ color: '#94a3b8', fontSize: '14px', marginTop: '10px' }}>
+                No photos added yet. Click "Take Photo" or "Upload Photo" above.
+              </p>
+            )}
+          </div>
+        );
+
       default:
         return <p className="text-muted">Unsupported field type</p>;
     }
