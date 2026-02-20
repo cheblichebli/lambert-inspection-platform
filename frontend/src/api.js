@@ -271,4 +271,18 @@ export const usersAPI = {
   },
 };
 
+// System API (Admin only)
+export const systemAPI = {
+  getAuditLogs: async (filters = {}) => {
+    const params = new URLSearchParams(filters);
+    const response = await api.get(`/system/audit-logs?${params.toString()}`);
+    return response.data;
+  },
+
+  getStats: async () => {
+    const response = await api.get('/system/stats');
+    return response.data;
+  },
+};
+
 export default api;
