@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, ClipboardCheck, FileText, Users, LogOut, Settings, Menu, X } from 'lucide-react';
+import { Home, ClipboardCheck, FileText, Users, LogOut, Settings, Menu, X, Shield } from 'lucide-react';
 
 const Navigation = ({ user, onLogout }) => {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -74,6 +74,17 @@ const Navigation = ({ user, onLogout }) => {
             >
               <Settings size={20} />
               <span>Admin</span>
+            </Link>
+          )}
+
+          {user?.role === 'admin' && (
+            <Link
+              to="/audit-logs"
+              className={`nav-link ${isActive('/audit-logs') ? 'nav-link-active' : ''}`}
+              onClick={() => setIsOpen(false)}
+            >
+              <Shield size={20} />
+              <span>Audit Logs</span>
             </Link>
           )}
 
