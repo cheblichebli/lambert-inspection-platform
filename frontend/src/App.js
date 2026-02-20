@@ -12,6 +12,7 @@ import UserManagement from './components/UserManagement';
 import Navigation from './components/Navigation';
 import SyncStatus from './components/SyncStatus';
 import AdminDashboard from './components/AdminDashboard';
+import AuditLogs from './components/AuditLogs';
 import './App.css';
 
 function App() {
@@ -83,10 +84,16 @@ function App() {
               path="/"
               element={user ? <Dashboard user={user} /> : <Navigate to="/login" />}
             />
-                <Route
-     path="/admin"
-     element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/dashboard" />}
-   />
+
+            <Route
+              path="/admin"
+              element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/dashboard" />}
+            />
+
+            <Route
+              path="/audit-logs"
+              element={user?.role === 'admin' ? <AuditLogs /> : <Navigate to="/dashboard" />}
+            />
             
             <Route
               path="/inspections"
