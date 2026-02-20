@@ -11,6 +11,7 @@ import FormList from './components/FormList';
 import UserManagement from './components/UserManagement';
 import Navigation from './components/Navigation';
 import SyncStatus from './components/SyncStatus';
+import AdminDashboard from './components/AdminDashboard';
 import './App.css';
 
 function App() {
@@ -82,6 +83,10 @@ function App() {
               path="/"
               element={user ? <Dashboard user={user} /> : <Navigate to="/login" />}
             />
+                <Route
+     path="/admin"
+     element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/dashboard" />}
+   />
             
             <Route
               path="/inspections"
