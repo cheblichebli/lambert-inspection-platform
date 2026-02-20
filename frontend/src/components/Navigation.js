@@ -64,16 +64,18 @@ const Navigation = ({ user, onLogout }) => {
               <Users size={20} />
               <span>Users</span>
             </Link>
-{user?.role === 'admin' && (
-  <Link
-    to="/admin"
-    className={`nav-link ${isActive('/admin') ? 'nav-link-active' : ''}`}
-    onClick={() => setIsOpen(false)}
-  >
-    <Settings size={20} />
-    <span>Admin</span>
-  </Link>
-)}
+          )}
+
+          {user?.role === 'admin' && (
+            <Link
+              to="/admin"
+              className={`nav-link ${isActive('/admin') ? 'nav-link-active' : ''}`}
+              onClick={() => setIsOpen(false)}
+            >
+              <Settings size={20} />
+              <span>Admin</span>
+            </Link>
+          )}
 
           <button onClick={onLogout} className="nav-link nav-logout">
             <LogOut size={20} />
