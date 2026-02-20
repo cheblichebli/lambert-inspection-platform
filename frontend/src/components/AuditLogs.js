@@ -49,6 +49,24 @@ const AuditLogs = () => {
     });
   };
 
+  const formatActionLabel = (action) => {
+    const labels = {
+      'users.created': 'Created User',
+      'users.deleted': 'Deleted User',
+      'users.updated': 'Updated User',
+      'users.password_changed': 'Changed Password',
+      'users.viewed': 'Viewed User',
+      'users.list_viewed': 'Viewed User List'
+    };
+    return labels[action] || action;
+  };
+
+  const cleanIPAddress = (ip) => {
+    if (!ip) return 'N/A';
+    // Remove IPv6 prefix
+    return ip.replace('::ffff:', '');
+  };
+
   const getActionBadge = (action) => {
     const colors = {
       'users.created': '#10b981',
@@ -70,30 +88,57 @@ const AuditLogs = () => {
         fontSize: '12px',
         fontWeight: '500'
       }}>
-        {action}
+        {formatActionLabel(action)}
       </span>
     );
   };
 
-  const formatDetails = (details) => {
-    if (!details) return null;
+  const formatDetails = (details, action) => {
+    if (!details) return <span style={{ color: '#94a3b8', fontSize: '12px' }}>-</span>;
     
     try {
       const parsed = typeof details === 'string' ? JSON.parse(details) : details;
+      
+      // For simple actions, show minimal details
+      if (action === 'users.list_viewed') {
+        return <span style={{ fontSize: '12px', color: '#64748b' }}>{parsed.count} users</span>;
+      }
+      
+      // For other actions, show compact key info
+      if (action === 'users.created') {
+        return (
+          <div style={{ fontSize: '12px', color: '#64748b' }}>
+            <div>{parsed.email}</div>
+            <div>Role: {parsed.role}</div>
+          </div>
+        );
+      }
+      
+      if (action === 'users.deleted') {
+        return (
+          <div style={{ fontSize: '12px', color: '#64748b' }}>
+            <div>{parsed.deletedEmail}</div>
+            <div>{parsed.deletedName}</div>
+          </div>
+        );
+      }
+      
+      // Default: show compact JSON
       return (
         <pre style={{
-          fontSize: '12px',
+          fontSize: '11px',
           backgroundColor: '#f8fafc',
-          padding: '8px',
+          padding: '6px',
           borderRadius: '4px',
           overflow: 'auto',
-          maxHeight: '100px'
+          maxHeight: '60px',
+          margin: 0
         }}>
           {JSON.stringify(parsed, null, 2)}
         </pre>
       );
     } catch {
-      return <span>{String(details)}</span>;
+      return <span style={{ fontSize: '12px', color: '#64748b' }}>{String(details)}</span>;
     }
   };
 
@@ -174,10 +219,10 @@ const AuditLogs = () => {
                             {log.entity_type} #{log.entity_id}
                           </div>
                         )}
-                        {formatDetails(log.details)}
+                        {formatDetails(log.details, log.action)}
                       </td>
                       <td style={{ fontSize: '12px', color: '#64748b' }}>
-                        {log.ip_address || 'N/A'}
+                        {cleanIPAddress(log.ip_address)}
                       </td>
                     </tr>
                   ))
