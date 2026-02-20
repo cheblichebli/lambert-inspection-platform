@@ -30,6 +30,7 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/forms', require('./routes/forms'));
 app.use('/api/inspections', require('./routes/inspections'));
 app.use('/api/sync', require('./routes/sync'));
+app.use('/api/system', require('./routes/system'));
 
 // Health check
 app.get('/api/health', (req, res) => {
