@@ -3,6 +3,45 @@ const bcrypt = require('bcryptjs');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const router = express.Router();
 
+// Helper function to log audit events
+async function logAudit(pool, userId, action, entityType, entityId, details, req) {
+  try {
+    // Get user info
+    let userEmail = null;
+    let userName = null;
+    
+    if (userId) {
+      const userResult = await pool.query(
+        'SELECT email, full_name FROM users WHERE id = $1',
+        [userId]
+      );
+      if (userResult.rows.length > 0) {
+        userEmail = userResult.rows[0].email;
+        userName = userResult.rows[0].full_name;
+      }
+    }
+
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, user_email, user_name, action, entity_type, entity_id, details, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        userId,
+        userEmail,
+        userName,
+        action,
+        entityType,
+        entityId,
+        details ? JSON.stringify(details) : null,
+        req.ip || req.connection?.remoteAddress || 'unknown',
+        req.headers['user-agent'] || 'unknown'
+      ]
+    );
+  } catch (error) {
+    console.error('Audit log error:', error);
+    // Don't fail the request if audit logging fails
+  }
+}
+
 // Get all users (Admin and Supervisor only)
 router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor'), async (req, res) => {
   const pool = req.app.get('db');
@@ -13,6 +52,9 @@ router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor'), async 
        FROM users 
        ORDER BY created_at DESC`
     );
+    
+    await logAudit(pool, req.user.id, 'users.list_viewed', null, null, { count: result.rows.length }, req);
+    
     res.json(result.rows);
   } catch (error) {
     console.error('Get users error:', error);
@@ -35,6 +77,8 @@ router.get('/:id', authenticateToken, authorizeRoles('admin', 'supervisor'), asy
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
+
+    await logAudit(pool, req.user.id, 'users.viewed', 'user', id, null, req);
 
     res.json(result.rows[0]);
   } catch (error) {
@@ -69,6 +113,12 @@ router.post('/', authenticateToken, authorizeRoles('admin'), async (req, res) =>
       [email, hashedPassword, fullName, role]
     );
 
+    await logAudit(pool, req.user.id, 'users.created', 'user', result.rows[0].id, {
+      email,
+      fullName,
+      role
+    }, req);
+
     res.status(201).json(result.rows[0]);
   } catch (error) {
     if (error.code === '23505') { // Unique violation
@@ -91,6 +141,10 @@ router.put('/:id', authenticateToken, authorizeRoles('admin'), async (req, res) 
       return res.status(400).json({ error: 'All fields are required' });
     }
 
+    // Get old values
+    const oldResult = await pool.query('SELECT full_name, role, is_active FROM users WHERE id = $1', [id]);
+    const oldData = oldResult.rows[0];
+
     // Update user
     const result = await pool.query(
       `UPDATE users 
@@ -103,6 +157,11 @@ router.put('/:id', authenticateToken, authorizeRoles('admin'), async (req, res) 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
+
+    await logAudit(pool, req.user.id, 'users.updated', 'user', id, {
+      before: oldData,
+      after: { fullName, role, isActive }
+    }, req);
 
     res.json(result.rows[0]);
   } catch (error) {
@@ -124,7 +183,7 @@ router.delete('/:id', authenticateToken, authorizeRoles('admin'), async (req, re
 
     // Get user info before deleting
     const userCheck = await pool.query(
-      'SELECT id, email, full_name FROM users WHERE id = $1',
+      'SELECT id, email, full_name, role FROM users WHERE id = $1',
       [id]
     );
 
@@ -136,6 +195,12 @@ router.delete('/:id', authenticateToken, authorizeRoles('admin'), async (req, re
 
     // Delete user
     await pool.query('DELETE FROM users WHERE id = $1', [id]);
+
+    await logAudit(pool, req.user.id, 'users.deleted', 'user', id, {
+      deletedEmail: deletedUser.email,
+      deletedName: deletedUser.full_name,
+      deletedRole: deletedUser.role
+    }, req);
 
     res.json({ 
       message: 'User deleted successfully', 
@@ -174,6 +239,10 @@ router.put('/:id/password', authenticateToken, authorizeRoles('admin'), async (r
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
+
+    await logAudit(pool, req.user.id, 'users.password_changed', 'user', id, {
+      targetEmail: result.rows[0].email
+    }, req);
 
     res.json({ 
       message: 'Password updated successfully',
