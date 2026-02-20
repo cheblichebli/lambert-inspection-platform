@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Calendar, User, Activity, Search, RefreshCw } from 'lucide-react';
+import { systemAPI } from '../api';
 import './AuditLogs.css';
 
 const AuditLogs = () => {
@@ -17,22 +18,16 @@ const AuditLogs = () => {
   const loadLogs = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
+      const filters = {
         limit: limit.toString(),
         offset: (page * limit).toString()
-      });
+      };
 
       if (searchAction) {
-        params.append('action', searchAction);
+        filters.action = searchAction;
       }
 
-      const response = await fetch(`/api/system/audit-logs?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      const data = await response.json();
+      const data = await systemAPI.getAuditLogs(filters);
       setLogs(data.logs || []);
       setTotal(data.total || 0);
     } catch (error) {
