@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { authAPI } from '../api';
-import { Wifi, WifiOff } from 'lucide-react';
+import { WifiOff } from 'lucide-react';
 
 const Login = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const isOnline = navigator.onLine;
@@ -21,7 +22,7 @@ const Login = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      const data = await authAPI.login(email, password);
+      const data = await authAPI.login(email, password, keepLoggedIn);
       onLogin(data.user);
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed. Please try again.');
@@ -81,6 +82,39 @@ const Login = ({ onLogin }) => {
               {error}
             </div>
           )}
+
+          {/* Keep me logged in checkbox */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '16px'
+          }}>
+            <input
+              type="checkbox"
+              id="keepLoggedIn"
+              checked={keepLoggedIn}
+              onChange={(e) => setKeepLoggedIn(e.target.checked)}
+              disabled={loading || !isOnline}
+              style={{
+                width: '16px',
+                height: '16px',
+                accentColor: '#4a9d5f',
+                cursor: 'pointer'
+              }}
+            />
+            <label
+              htmlFor="keepLoggedIn"
+              style={{
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+                color: '#64748b',
+                userSelect: 'none'
+              }}
+            >
+              Keep me logged in for 7 days
+            </label>
+          </div>
 
           <button
             type="submit"
