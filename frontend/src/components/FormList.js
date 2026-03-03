@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { formsAPI } from '../api';
-import { Plus, Edit, Trash2, EyeOff } from 'lucide-react';
+import { Plus, Edit, Trash2, EyeOff, Eye } from 'lucide-react';
 
 const FormList = ({ user }) => {
   const [forms, setForms] = useState([]);
@@ -13,7 +13,6 @@ const FormList = ({ user }) => {
 
   const loadForms = async () => {
     try {
-      // Pass null to get ALL forms (active + inactive)
       const data = await formsAPI.getAll(null, null);
       setForms(data);
     } catch (error) {
@@ -71,7 +70,7 @@ const FormList = ({ user }) => {
         ))}
       </div>
 
-      {/* Inactive Forms — greyed out, shown below active ones */}
+      {/* Inactive Forms */}
       {inactiveForms.length > 0 && (
         <>
           <div style={{
@@ -107,16 +106,15 @@ const FormList = ({ user }) => {
                 </div>
                 <span className="badge badge-info">{form.category}</span>
                 <p className="text-muted">{form.description}</p>
-                {user.role === 'admin' && (
-                  <div className="card-actions">
-                    <Link to={`/forms/${form.id}/edit`} className="btn btn-secondary btn-sm">
-                      <Edit size={16} /> Edit
-                    </Link>
-                    <button onClick={() => handleDelete(form.id)} className="btn btn-error btn-sm">
-                      <Trash2 size={16} /> Delete
-                    </button>
-                  </div>
-                )}
+                <div className="card-actions">
+                  <Link
+                    to={`/forms/${form.id}/edit`}
+                    className="btn btn-secondary btn-sm"
+                    style={{ pointerEvents: 'auto', opacity: 1 }}
+                  >
+                    <Eye size={16} /> View
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
