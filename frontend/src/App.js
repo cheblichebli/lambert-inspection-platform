@@ -10,7 +10,6 @@ import FormBuilder from './components/FormBuilder';
 import FormList from './components/FormList';
 import UserManagement from './components/UserManagement';
 import Navigation from './components/Navigation';
-import SyncStatus from './components/SyncStatus';
 import AdminDashboard from './components/AdminDashboard';
 import AuditLogs from './components/AuditLogs';
 import './App.css';
@@ -21,20 +20,16 @@ function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
-    // Check authentication
     const currentUser = authAPI.getCurrentUser();
     setUser(currentUser);
     setLoading(false);
 
-    // Download offline data if user is logged in and online
     if (currentUser && navigator.onLine) {
       syncAPI.downloadOfflineData().catch(console.error);
     }
 
-    // Online/offline event listeners
     const handleOnline = () => {
       setIsOnline(true);
-      // Auto-sync when coming back online
       if (currentUser) {
         syncAPI.syncInspections()
           .then(() => syncAPI.downloadOfflineData())
@@ -70,16 +65,15 @@ function App() {
   return (
     <Router>
       <div className="app">
-        {user && <Navigation user={user} onLogout={handleLogout} />}
-        <SyncStatus isOnline={isOnline} />
-        
+        {user && <Navigation user={user} onLogout={handleLogout} isOnline={isOnline} />}
+
         <div className="main-content">
           <Routes>
             <Route
               path="/login"
               element={user ? <Navigate to="/" /> : <Login onLogin={setUser} />}
             />
-            
+
             <Route
               path="/"
               element={user ? <Dashboard user={user} /> : <Navigate to="/login" />}
@@ -94,22 +88,22 @@ function App() {
               path="/audit-logs"
               element={user?.role === 'admin' ? <AuditLogs /> : <Navigate to="/dashboard" />}
             />
-            
+
             <Route
               path="/inspections"
               element={user ? <InspectionList user={user} /> : <Navigate to="/login" />}
             />
-            
+
             <Route
               path="/inspections/new"
               element={user ? <InspectionForm user={user} /> : <Navigate to="/login" />}
             />
-            
+
             <Route
               path="/inspections/:id"
               element={user ? <InspectionDetail user={user} /> : <Navigate to="/login" />}
             />
-            
+
             <Route
               path="/forms"
               element={
@@ -120,7 +114,7 @@ function App() {
                 )
               }
             />
-            
+
             <Route
               path="/forms/new"
               element={
@@ -131,7 +125,7 @@ function App() {
                 )
               }
             />
-            
+
             <Route
               path="/forms/:id/edit"
               element={
@@ -142,7 +136,7 @@ function App() {
                 )
               }
             />
-            
+
             <Route
               path="/users"
               element={
@@ -153,7 +147,7 @@ function App() {
                 )
               }
             />
-            
+
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </div>
