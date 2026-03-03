@@ -3,6 +3,30 @@ const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
+// ─── Audit helper ────────────────────────────────────────────────────────────
+const logAudit = async (pool, req, action, entityType, entityId, details = {}) => {
+  try {
+    await pool.query(
+      `INSERT INTO audit_logs 
+       (user_id, user_email, user_name, action, entity_type, entity_id, details, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        req.user?.id || null,
+        req.user?.email || null,
+        req.user?.full_name || null,
+        action,
+        entityType,
+        entityId || null,
+        JSON.stringify(details),
+        req.ip || null,
+        req.headers['user-agent'] || null
+      ]
+    );
+  } catch (err) {
+    console.error('Audit log error:', err);
+  }
+};
+
 // Get all inspections
 router.get('/', authenticateToken, async (req, res) => {
   const pool = req.app.get('db');
@@ -23,7 +47,6 @@ router.get('/', authenticateToken, async (req, res) => {
     `;
     const params = [];
     
-    // Inspectors can only see their own inspections
     if (req.user.role === 'inspector') {
       params.push(req.user.id);
       query += ` AND i.inspector_id = $${params.length}`;
@@ -58,7 +81,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   
   try {
-    // Get inspection
     const inspectionResult = await pool.query(
       `SELECT i.*, 
               ft.title as template_title,
@@ -77,13 +99,11 @@ router.get('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Inspection not found' });
     }
 
-    // Check permissions
     const inspection = inspectionResult.rows[0];
     if (req.user.role === 'inspector' && inspection.inspector_id !== req.user.id) {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Get photos
     const photosResult = await pool.query(
       `SELECT id, caption, sequence_order, photo_data, created_at
        FROM inspection_photos
@@ -104,18 +124,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.post('/', authenticateToken, async (req, res) => {
   const pool = req.app.get('db');
   const { 
-    templateId, 
-    data, 
-    location, 
-    equipmentId, 
-    notes, 
-    photos, 
-    status = 'draft',
-    gpsLatitude,
-    gpsLongitude,
-    gpsAccuracy,
-    inspectorSignature,
-    scannedCodes
+    templateId, data, location, equipmentId, notes, photos, 
+    status = 'draft', gpsLatitude, gpsLongitude, gpsAccuracy,
+    inspectorSignature, scannedCodes
   } = req.body;
   
   const client = await pool.connect();
@@ -123,10 +134,8 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // No photo limit - unlimited photos allowed
     const syncId = uuidv4();
     
-    // Create inspection
     const inspectionResult = await client.query(
       `INSERT INTO inspections 
        (template_id, inspector_id, status, data, location, equipment_id, notes, sync_id, 
@@ -135,19 +144,10 @@ router.post('/', authenticateToken, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        RETURNING *`,
       [
-        templateId, 
-        req.user.id, 
-        status, 
-        JSON.stringify(data), 
-        location, 
-        equipmentId, 
-        notes, 
-        syncId,
+        templateId, req.user.id, status, JSON.stringify(data), location, equipmentId, notes, syncId,
         status === 'submitted' ? new Date() : null,
         false,
-        gpsLatitude || null,
-        gpsLongitude || null,
-        gpsAccuracy || null,
+        gpsLatitude || null, gpsLongitude || null, gpsAccuracy || null,
         (gpsLatitude && gpsLongitude) ? new Date() : null,
         inspectorSignature || null,
         inspectorSignature ? new Date() : null,
@@ -171,6 +171,41 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     await client.query('COMMIT');
+
+    // ── Audit logs ──────────────────────────────────────────────────────────
+    // Get template name for context
+    const tmpl = await pool.query('SELECT title FROM form_templates WHERE id = $1', [templateId]);
+    const templateTitle = tmpl.rows[0]?.title || `Template #${templateId}`;
+
+    if (status === 'submitted') {
+      await logAudit(pool, req, 'inspections.submitted', 'inspection', inspection.id, {
+        templateTitle,
+        location,
+        equipmentId
+      });
+    } else {
+      await logAudit(pool, req, 'inspections.created', 'inspection', inspection.id, {
+        templateTitle,
+        location,
+        equipmentId,
+        status
+      });
+    }
+
+    if (inspectorSignature) {
+      await logAudit(pool, req, 'inspections.signed', 'inspection', inspection.id, {
+        templateTitle,
+        signatureType: 'inspector'
+      });
+    }
+
+    if (photos && photos.length > 0) {
+      await logAudit(pool, req, 'inspections.photos_uploaded', 'inspection', inspection.id, {
+        templateTitle,
+        photoCount: photos.length
+      });
+    }
+
     res.status(201).json(inspection);
   } catch (error) {
     await client.query('ROLLBACK');
@@ -186,22 +221,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
   const pool = req.app.get('db');
   const { id } = req.params;
   const { 
-    data, 
-    location, 
-    equipmentId, 
-    notes, 
-    status,
-    gpsLatitude,
-    gpsLongitude,
-    gpsAccuracy,
-    inspectorSignature,
-    scannedCodes
+    data, location, equipmentId, notes, status,
+    gpsLatitude, gpsLongitude, gpsAccuracy,
+    inspectorSignature, scannedCodes
   } = req.body;
   
   try {
-    // Check if inspection exists and user has permission
     const checkResult = await pool.query(
-      'SELECT inspector_id, status FROM inspections WHERE id = $1',
+      'SELECT inspector_id, status, template_id FROM inspections WHERE id = $1',
       [id]
     );
 
@@ -209,11 +236,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Inspection not found' });
     }
 
-    const inspection = checkResult.rows[0];
+    const existing = checkResult.rows[0];
     
-    // Only inspector can edit their own draft inspections
     if (req.user.role === 'inspector' && 
-        (inspection.inspector_id !== req.user.id || inspection.status !== 'draft')) {
+        (existing.inspector_id !== req.user.id || existing.status !== 'draft')) {
       return res.status(403).json({ error: 'Cannot edit this inspection' });
     }
 
@@ -232,19 +258,37 @@ router.put('/:id', authenticateToken, async (req, res) => {
        WHERE id = $6
        RETURNING *`,
       [
-        JSON.stringify(data), 
-        location, 
-        equipmentId, 
-        notes, 
-        status || inspection.status, 
-        id,
-        gpsLatitude,
-        gpsLongitude,
-        gpsAccuracy,
+        JSON.stringify(data), location, equipmentId, notes, 
+        status || existing.status, id,
+        gpsLatitude, gpsLongitude, gpsAccuracy,
         inspectorSignature,
         scannedCodes ? JSON.stringify(scannedCodes) : null
       ]
     );
+
+    // ── Audit logs ──────────────────────────────────────────────────────────
+    const tmpl = await pool.query('SELECT title FROM form_templates WHERE id = $1', [existing.template_id]);
+    const templateTitle = tmpl.rows[0]?.title || `Template #${existing.template_id}`;
+    const newStatus = status || existing.status;
+
+    if (newStatus === 'submitted' && existing.status !== 'submitted') {
+      await logAudit(pool, req, 'inspections.submitted', 'inspection', id, {
+        templateTitle, location, equipmentId
+      });
+    } else {
+      await logAudit(pool, req, 'inspections.updated', 'inspection', id, {
+        templateTitle,
+        fieldsUpdated: Object.keys(data || {}).length,
+        location
+      });
+    }
+
+    if (inspectorSignature) {
+      await logAudit(pool, req, 'inspections.signed', 'inspection', id, {
+        templateTitle,
+        signatureType: 'inspector'
+      });
+    }
 
     res.json(result.rows[0]);
   } catch (error) {
@@ -270,7 +314,7 @@ router.post('/:id/review', authenticateToken, authorizeRoles('supervisor', 'admi
            reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP,
            supervisor_signature = $5
        WHERE id = $4 AND status = 'submitted'
-       RETURNING *`,
+       RETURNING *, (SELECT title FROM form_templates WHERE id = template_id) as template_title`,
       [status, comments, req.user.id, id, supervisorSignature || null]
     );
 
@@ -278,23 +322,46 @@ router.post('/:id/review', authenticateToken, authorizeRoles('supervisor', 'admi
       return res.status(404).json({ error: 'Inspection not found or not submitted' });
     }
 
-    res.json(result.rows[0]);
+    const inspection = result.rows[0];
+
+    // ── Audit logs ──────────────────────────────────────────────────────────
+    await logAudit(pool, req, `inspections.${status}`, 'inspection', id, {
+      templateTitle: inspection.template_title,
+      reviewComments: comments || null
+    });
+
+    if (supervisorSignature) {
+      await logAudit(pool, req, 'inspections.signed', 'inspection', id, {
+        templateTitle: inspection.template_title,
+        signatureType: 'supervisor'
+      });
+    }
+
+    res.json(inspection);
   } catch (error) {
     console.error('Review inspection error:', error);
     res.status(500).json({ error: 'Failed to review inspection' });
   }
 });
 
-// Delete inspection (own draft only, or admin)
+// Delete inspection
 router.delete('/:id', authenticateToken, async (req, res) => {
   const pool = req.app.get('db');
   const { id } = req.params;
   
   try {
+    // Fetch details before deleting for audit log
+    const details = await pool.query(
+      `SELECT i.equipment_id, i.location, ft.title as template_title 
+       FROM inspections i
+       LEFT JOIN form_templates ft ON i.template_id = ft.id
+       WHERE i.id = $1`,
+      [id]
+    );
+
     let query = 'DELETE FROM inspections WHERE id = $1';
     const params = [id];
     
-    // Inspectors can only delete their own drafts
     if (req.user.role === 'inspector') {
       query += ' AND inspector_id = $2 AND status = $3';
       params.push(req.user.id, 'draft');
@@ -307,6 +374,14 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Inspection not found or cannot be deleted' });
     }
+
+    // ── Audit log ───────────────────────────────────────────────────────────
+    const d = details.rows[0] || {};
+    await logAudit(pool, req, 'inspections.deleted', 'inspection', id, {
+      templateTitle: d.template_title,
+      location: d.location,
+      equipmentId: d.equipment_id
+    });
 
     res.json({ message: 'Inspection deleted successfully' });
   } catch (error) {
