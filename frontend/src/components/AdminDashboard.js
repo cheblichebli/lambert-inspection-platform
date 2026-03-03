@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Database, Users, FileText, Camera, HardDrive, Trash2 } from 'lucide-react';
+import { systemAPI } from '../api';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
@@ -16,12 +17,7 @@ const AdminDashboard = () => {
 
   const loadStats = async () => {
     try {
-      const response = await fetch('/api/system/stats', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const data = await response.json();
+      const data = await systemAPI.getStats();
       setStats(data);
     } catch (error) {
       console.error('Failed to load stats:', error);
@@ -47,17 +43,16 @@ const AdminDashboard = () => {
       'Are you ABSOLUTELY sure?'
     );
 
-    if (!finalConfirm) {
-      return;
-    }
+    if (!finalConfirm) return;
 
     setResetLoading(true);
 
     try {
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       const response = await fetch('/api/system/hard-reset', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ confirmationCode })
@@ -72,11 +67,8 @@ const AdminDashboard = () => {
       setResetResult(data);
       setShowResetModal(false);
       setConfirmationCode('');
-      
-      // Reload stats
-      setTimeout(() => {
-        loadStats();
-      }, 1000);
+
+      setTimeout(() => loadStats(), 1000);
 
       alert('✅ HARD RESET COMPLETE!\n\nPlatform has been reset to factory settings.');
 
@@ -102,7 +94,7 @@ const AdminDashboard = () => {
     <div className="page-container">
       <div className="page-header">
         <h1>Admin Dashboard</h1>
-        <button 
+        <button
           onClick={() => setShowResetModal(true)}
           className="btn btn-error"
           style={{ backgroundColor: '#dc2626' }}
@@ -220,9 +212,9 @@ const AdminDashboard = () => {
                 </ul>
               </div>
 
-              <div style={{ 
-                backgroundColor: '#fef3c7', 
-                padding: '15px', 
+              <div style={{
+                backgroundColor: '#fef3c7',
+                padding: '15px',
                 borderRadius: '8px',
                 marginTop: '20px',
                 border: '2px solid #f59e0b'
@@ -237,9 +229,9 @@ const AdminDashboard = () => {
 
               <div className="form-group" style={{ marginTop: '20px' }}>
                 <label style={{ fontWeight: 'bold' }}>
-                  Type <code style={{ 
-                    backgroundColor: '#fee2e2', 
-                    padding: '2px 6px', 
+                  Type <code style={{
+                    backgroundColor: '#fee2e2',
+                    padding: '2px 6px',
                     borderRadius: '4px',
                     color: '#dc2626'
                   }}>RESET_EVERYTHING</code> to confirm:
@@ -250,7 +242,7 @@ const AdminDashboard = () => {
                   onChange={(e) => setConfirmationCode(e.target.value)}
                   placeholder="Type: RESET_EVERYTHING"
                   className="form-control"
-                  style={{ 
+                  style={{
                     marginTop: '10px',
                     fontFamily: 'monospace',
                     fontSize: '16px'
@@ -260,7 +252,7 @@ const AdminDashboard = () => {
             </div>
 
             <div className="modal-actions">
-              <button 
+              <button
                 onClick={() => {
                   setShowResetModal(false);
                   setConfirmationCode('');
@@ -270,11 +262,11 @@ const AdminDashboard = () => {
               >
                 Cancel (Safe)
               </button>
-              <button 
+              <button
                 onClick={executeHardReset}
                 className="btn btn-error"
                 disabled={confirmationCode !== 'RESET_EVERYTHING' || resetLoading}
-                style={{ 
+                style={{
                   backgroundColor: '#dc2626',
                   opacity: confirmationCode !== 'RESET_EVERYTHING' ? 0.5 : 1
                 }}
