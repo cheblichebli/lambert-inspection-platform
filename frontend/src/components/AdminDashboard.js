@@ -126,6 +126,7 @@ const AdminDashboard = () => {
             <p>Form Templates</p>
             <div className="stat-breakdown">
               <span>Active: {stats?.active_forms || 0}</span>
+              <span>Inactive: {(stats?.forms || 0) - (stats?.active_forms || 0)}</span>
             </div>
           </div>
         </div>
@@ -137,6 +138,8 @@ const AdminDashboard = () => {
             <p>Inspections</p>
             <div className="stat-breakdown">
               <span>Submitted: {stats?.submitted_inspections || 0}</span>
+              <span>Approved: {stats?.approved_inspections || 0}</span>
+              <span>Rejected: {stats?.rejected_inspections || 0}</span>
             </div>
           </div>
         </div>
