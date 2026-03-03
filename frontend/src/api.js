@@ -3,6 +3,9 @@ import { db } from './db';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
+const SESSION_DURATION = 60 * 60 * 1000;          // 1 hour in ms
+const KEEP_LOGGED_IN_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+
 // Create axios instance
 const api = axios.create({
   baseURL: API_URL,
@@ -14,7 +17,7 @@ const api = axios.create({
 // Request interceptor to add token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -28,8 +31,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      authAPI.logout();
       window.location.href = '/login';
     }
     return Promise.reject(error);
@@ -41,22 +43,60 @@ export const isOnline = () => navigator.onLine;
 
 // Auth API
 export const authAPI = {
-  login: async (email, password) => {
+  login: async (email, password, keepLoggedIn = false) => {
     const response = await api.post('/auth/login', { email, password });
+
     if (response.data.token) {
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      const loginData = {
+        token: response.data.token,
+        user: JSON.stringify(response.data.user),
+        loginTimestamp: Date.now().toString(),
+        keepLoggedIn: keepLoggedIn ? 'true' : 'false',
+      };
+
+      if (keepLoggedIn) {
+        localStorage.setItem('token', loginData.token);
+        localStorage.setItem('user', loginData.user);
+        localStorage.setItem('loginTimestamp', loginData.loginTimestamp);
+        localStorage.setItem('keepLoggedIn', loginData.keepLoggedIn);
+      } else {
+        sessionStorage.setItem('token', loginData.token);
+        sessionStorage.setItem('user', loginData.user);
+        sessionStorage.setItem('loginTimestamp', loginData.loginTimestamp);
+        sessionStorage.setItem('keepLoggedIn', loginData.keepLoggedIn);
+      }
     }
+
     return response.data;
   },
 
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('loginTimestamp');
+    localStorage.removeItem('keepLoggedIn');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('loginTimestamp');
+    sessionStorage.removeItem('keepLoggedIn');
   },
 
   getCurrentUser: () => {
-    const userStr = localStorage.getItem('user');
+    const storage = localStorage.getItem('token') ? localStorage : sessionStorage;
+
+    const token = storage.getItem('token');
+    if (!token) return null;
+
+    const loginTimestamp = parseInt(storage.getItem('loginTimestamp') || '0', 10);
+    const keepLoggedIn = storage.getItem('keepLoggedIn') === 'true';
+    const duration = keepLoggedIn ? KEEP_LOGGED_IN_DURATION : SESSION_DURATION;
+
+    if (Date.now() - loginTimestamp > duration) {
+      authAPI.logout();
+      return null;
+    }
+
+    const userStr = storage.getItem('user');
     return userStr ? JSON.parse(userStr) : null;
   },
 
@@ -74,7 +114,6 @@ export const authAPI = {
 export const formsAPI = {
   getAll: async (category = null, isActive = true) => {
     if (!isOnline()) {
-      // Get from local DB
       let forms = await db.forms.toArray();
       if (category) {
         forms = forms.filter(f => f.category === category);
@@ -218,7 +257,6 @@ export const syncAPI = {
       inspections: unsyncedInspections,
     });
 
-    // Mark synced inspections
     for (const success of response.data.success) {
       await db.markInspectionSynced(success.syncId, success.serverId);
     }
