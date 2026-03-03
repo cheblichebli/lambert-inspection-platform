@@ -5,47 +5,62 @@ const router = express.Router();
 // Get audit logs (Admin only)
 router.get('/audit-logs', authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const pool = req.app.get('db');
-  const { userId, action, limit = 100, offset = 0 } = req.query;
+  const { userId, action, role, dateFrom, dateTo, limit = 100, offset = 0 } = req.query;
 
   try {
     let query = `
-      SELECT * FROM audit_logs
+      SELECT a.*, u.role as user_role
+      FROM audit_logs a
+      LEFT JOIN users u ON a.user_id = u.id
       WHERE 1=1
     `;
     const params = [];
-    let paramCount = 0;
+    let p = 0;
 
     if (userId) {
-      paramCount++;
-      query += ` AND user_id = $${paramCount}`;
-      params.push(userId);
+      p++; query += ` AND a.user_id = $${p}`; params.push(userId);
     }
-
     if (action) {
-      paramCount++;
-      query += ` AND action LIKE $${paramCount}`;
-      params.push(`%${action}%`);
+      p++; query += ` AND a.action LIKE $${p}`; params.push(`%${action}%`);
+    }
+    if (role) {
+      p++; query += ` AND u.role = $${p}`; params.push(role);
+    }
+    if (dateFrom) {
+      p++; query += ` AND a.created_at >= $${p}`; params.push(new Date(dateFrom));
+    }
+    if (dateTo) {
+      p++; query += ` AND a.created_at <= $${p}`; 
+      // Include full day
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      params.push(end);
     }
 
-    query += ` ORDER BY created_at DESC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`;
+    query += ` ORDER BY a.created_at DESC LIMIT $${p+1} OFFSET $${p+2}`;
     params.push(limit, offset);
 
     const result = await pool.query(query, params);
 
-    let countQuery = 'SELECT COUNT(*) FROM audit_logs WHERE 1=1';
+    // Count query
+    let countQuery = `
+      SELECT COUNT(*) FROM audit_logs a
+      LEFT JOIN users u ON a.user_id = u.id
+      WHERE 1=1
+    `;
     const countParams = [];
-    let countParamCount = 0;
+    let cp = 0;
 
-    if (userId) {
-      countParamCount++;
-      countQuery += ` AND user_id = $${countParamCount}`;
-      countParams.push(userId);
-    }
-
-    if (action) {
-      countParamCount++;
-      countQuery += ` AND action LIKE $${countParamCount}`;
-      countParams.push(`%${action}%`);
+    if (userId) { cp++; countQuery += ` AND a.user_id = $${cp}`; countParams.push(userId); }
+    if (action) { cp++; countQuery += ` AND a.action LIKE $${cp}`; countParams.push(`%${action}%`); }
+    if (role)   { cp++; countQuery += ` AND u.role = $${cp}`; countParams.push(role); }
+    if (dateFrom) { cp++; countQuery += ` AND a.created_at >= $${cp}`; countParams.push(new Date(dateFrom)); }
+    if (dateTo) {
+      cp++;
+      countQuery += ` AND a.created_at <= $${cp}`;
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      countParams.push(end);
     }
 
     const countResult = await pool.query(countQuery, countParams);
@@ -59,6 +74,23 @@ router.get('/audit-logs', authenticateToken, authorizeRoles('admin'), async (req
   } catch (error) {
     console.error('Get audit logs error:', error);
     res.status(500).json({ error: 'Failed to fetch audit logs' });
+  }
+});
+
+// Get list of users for filter dropdown (Admin only)
+router.get('/audit-users', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+  const pool = req.app.get('db');
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT a.user_id, a.user_name, a.user_email, u.role
+       FROM audit_logs a
+       LEFT JOIN users u ON a.user_id = u.id
+       WHERE a.user_id IS NOT NULL
+       ORDER BY a.user_name`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch audit users' });
   }
 });
 
