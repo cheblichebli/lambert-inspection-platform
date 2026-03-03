@@ -3,8 +3,8 @@ import { db } from './db';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
-const SESSION_DURATION = 60 * 60 * 1000;          // 1 hour in ms
-const KEEP_LOGGED_IN_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
+const SESSION_DURATION = 60 * 60 * 1000;
+const KEEP_LOGGED_IN_DURATION = 7 * 24 * 60 * 60 * 1000;
 
 // Create axios instance
 const api = axios.create({
@@ -123,11 +123,11 @@ export const formsAPI = {
       }
       return forms;
     }
-    
+
     const params = new URLSearchParams();
     if (category) params.append('category', category);
     if (isActive !== null) params.append('isActive', isActive);
-    
+
     const response = await api.get(`/forms?${params.toString()}`);
     return response.data;
   },
@@ -161,14 +161,14 @@ export const inspectionsAPI = {
   getAll: async (filters = {}) => {
     if (!isOnline()) {
       let inspections = await db.inspections.toArray();
-      
+
       if (filters.status) {
         inspections = inspections.filter(i => i.status === filters.status);
       }
       if (filters.templateId) {
         inspections = inspections.filter(i => i.template_id === filters.templateId);
       }
-      
+
       return inspections;
     }
 
@@ -248,7 +248,7 @@ export const syncAPI = {
     }
 
     const unsyncedInspections = await db.getUnsyncedInspections();
-    
+
     if (unsyncedInspections.length === 0) {
       return { success: [], failed: [], totalSynced: 0 };
     }
@@ -314,6 +314,11 @@ export const systemAPI = {
   getAuditLogs: async (filters = {}) => {
     const params = new URLSearchParams(filters);
     const response = await api.get(`/system/audit-logs?${params.toString()}`);
+    return response.data;
+  },
+
+  getAuditUsers: async () => {
+    const response = await api.get('/system/audit-users');
     return response.data;
   },
 
