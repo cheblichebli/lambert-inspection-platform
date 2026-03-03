@@ -1,8 +1,9 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, ClipboardCheck, FileText, Users, LogOut, Settings, Menu, X, Shield } from 'lucide-react';
+import SyncStatus from './SyncStatus';
 
-const Navigation = ({ user, onLogout }) => {
+const Navigation = ({ user, onLogout, isOnline }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const location = useLocation();
 
@@ -13,9 +14,9 @@ const Navigation = ({ user, onLogout }) => {
       <div className="nav-container">
         <div className="nav-brand">
           <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <img 
-              src="/lambert-logo.jpg" 
-              alt="Lambert" 
+            <img
+              src="/lambert-logo.jpg"
+              alt="Lambert"
               style={{ height: '40px', width: 'auto' }}
             />
           </Link>
@@ -87,6 +88,11 @@ const Navigation = ({ user, onLogout }) => {
               <span>Audit Logs</span>
             </Link>
           )}
+
+          {/* Sync status sits in the nav flow, right before Logout */}
+          <div className="nav-sync-wrapper">
+            <SyncStatus isOnline={isOnline} />
+          </div>
 
           <button onClick={onLogout} className="nav-link nav-logout">
             <LogOut size={20} />
