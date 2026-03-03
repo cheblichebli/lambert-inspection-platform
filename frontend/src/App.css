@@ -111,19 +111,21 @@ body {
   background: rgba(255, 255, 255, 0.15);
 }
 
-/* Sync Status */
-.sync-status {
-  position: fixed;
-  top: 70px;
-  right: 20px;
-  background: white;
-  padding: 10px 15px;
-  border-radius: 8px;
-  box-shadow: var(--shadow-lg);
+/* Sync Status — now lives inside the nav bar, no longer floating */
+.nav-sync-wrapper {
   display: flex;
   align-items: center;
-  gap: 10px;
-  z-index: 90;
+  margin: 0 4px;
+}
+
+.sync-status {
+  position: static;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .sync-indicator {
@@ -134,11 +136,11 @@ body {
 }
 
 .online .sync-indicator {
-  color: var(--success);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .offline .sync-indicator {
-  color: var(--error);
+  color: #fca5a5;
 }
 
 .unsynced-badge {
@@ -151,9 +153,9 @@ body {
 }
 
 .btn-sync {
-  background: var(--primary);
+  background: rgba(255, 255, 255, 0.2);
   color: white;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.3);
   padding: 6px 12px;
   border-radius: 6px;
   cursor: pointer;
@@ -161,6 +163,43 @@ body {
   align-items: center;
   gap: 6px;
   font-size: 0.875rem;
+  transition: background 0.2s;
+}
+
+.btn-sync:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.btn-sync:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Inline sync feedback messages */
+.sync-message {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  animation: fadeIn 0.2s ease;
+  white-space: nowrap;
+}
+
+.sync-message--success {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.sync-message--error {
+  background: rgba(239, 68, 68, 0.3);
+  color: white;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .spinning {
@@ -774,9 +813,9 @@ body {
     justify-content: flex-start;
   }
 
-  .sync-status {
-    top: auto;
-    bottom: 20px;
+  .nav-sync-wrapper {
+    width: 100%;
+    padding: 4px 0;
   }
 
   .stats-grid {
