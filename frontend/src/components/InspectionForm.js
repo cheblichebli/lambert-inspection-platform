@@ -484,6 +484,78 @@ const InspectionForm = ({ user }) => {
           </div>
         );
 
+      case 'note':
+        return (
+          <div style={{
+            background: '#fffbeb', border: '1px solid #fcd34d',
+            borderLeft: '4px solid #f59e0b', borderRadius: '6px',
+            padding: '12px 16px', margin: '4px 0'
+          }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: '1rem', flexShrink: 0 }}>📌</span>
+              <p style={{ margin: 0, fontSize: '0.875rem', color: '#92400e', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {field.placeholder || field.label}
+              </p>
+            </div>
+          </div>
+        );
+
+      case 'signatories': {
+        var roles = field.options && field.options.length > 0 ? field.options : ['Signatory'];
+        var sigData = formData[field.id] || roles.map(function(r) { return { role: r, name: '', signature: '', date: '' }; });
+
+        var updateSig = function(rowIdx, key, val) {
+          var newSigs = sigData.map(function(s) { return Object.assign({}, s); });
+          newSigs[rowIdx][key] = val;
+          handleFieldChange(field.id, newSigs);
+        };
+
+        return (
+          <div style={{ overflowX: 'auto', marginTop: '8px' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.875rem' }}>
+              <thead>
+                <tr>
+                  {['Name', 'Role', 'Signature', 'Date'].map(function(h) {
+                    return (
+                      <th key={h} style={{
+                        border: '1px solid #e2e8f0', padding: '8px 12px',
+                        background: '#f1f5f9', color: '#374151', fontWeight: 600, textAlign: 'left'
+                      }}>{h}</th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {roles.map(function(role, ri) {
+                  var row = sigData[ri] || { role: role, name: '', signature: '', date: '' };
+                  return (
+                    <tr key={ri} style={{ background: ri % 2 === 0 ? 'white' : '#fafafa' }}>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '4px 6px' }}>
+                        <input type="text" value={row.name || ''} onChange={function(e) { updateSig(ri, 'name', e.target.value); }}
+                          style={{ border: 'none', background: 'transparent', width: '100%', fontSize: '0.875rem', padding: '2px 4px' }}
+                          placeholder="Full name" />
+                      </td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '8px 12px', color: '#374151', fontWeight: 500 }}>
+                        {role}
+                      </td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '4px 6px' }}>
+                        <input type="text" value={row.signature || ''} onChange={function(e) { updateSig(ri, 'signature', e.target.value); }}
+                          style={{ border: 'none', background: 'transparent', width: '100%', fontSize: '0.875rem', padding: '2px 4px', fontFamily: 'cursive' }}
+                          placeholder="Signature" />
+                      </td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '4px 6px' }}>
+                        <input type="date" value={row.date || ''} onChange={function(e) { updateSig(ri, 'date', e.target.value); }}
+                          style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', width: '130px' }} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+
       default:
         return <p className="text-muted">Unsupported field type</p>;
     }
