@@ -129,4 +129,123 @@ router.get('/stats', authenticateToken, authorizeRoles('admin'), async (req, res
   }
 });
 
+// PDF → Digital Form converter (Admin only)
+router.post('/convert-pdf-form', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+  const { pdfBase64 } = req.body;
+
+  if (!pdfBase64) {
+    return res.status(400).json({ error: 'No PDF data provided' });
+  }
+
+  const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'AI service not configured. Please add ANTHROPIC_API_KEY to Railway environment variables.' });
+  }
+
+  const systemPrompt = `You are a form digitization expert. Analyze the PDF form and extract its structure into a digital form definition.
+
+Return ONLY a valid JSON object with this exact structure, no markdown, no explanation, no backticks:
+{
+  "title": "form title",
+  "category": "QA/QC",
+  "description": "brief description",
+  "fields": [
+    {
+      "id": "field_1",
+      "type": "text",
+      "label": "field label",
+      "required": false,
+      "placeholder": "",
+      "options": [],
+      "columns": []
+    }
+  ]
+}
+
+Field type rules:
+- Text input lines → "text"
+- Multi-line text areas → "textarea"
+- Dropdown lists → "select" with options array filled
+- Single tick/check boxes (yes/no) → "checkbox"
+- Multiple choice pick-one → "radio" with options array filled
+- Date fields → "date"
+- Photo/image capture areas → "photo"
+- Tables with repeating rows (checklists, item lists, inspection rows) → "table" with columns array
+
+For "table" type, columns array uses prefixes:
+- Short text entry → "text:Column Name"
+- Checkbox/tick columns → "check:Column Name"
+- Date columns → "date:Column Name"
+
+Example for an equipment checklist table:
+["text:Item No.", "text:Description", "check:OK", "check:BAD", "check:Repair", "check:Add", "check:Replace", "text:Assigned To", "date:Planned Date", "date:Completion Date"]
+
+Category must be exactly one of: "QA/QC", "QHSE", "Equipment Installation", "Maintenance"
+
+Return only the raw JSON. No markdown. No explanation.`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-6',
+        max_tokens: 2000,
+        system: systemPrompt,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: pdfBase64
+              }
+            },
+            {
+              type: 'text',
+              text: 'Convert this PDF form to a digital form definition. Return only the JSON object.'
+            }
+          ]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('Anthropic API error:', errText);
+      return res.status(500).json({ error: 'AI conversion failed: ' + response.status });
+    }
+
+    const data = await response.json();
+    const text = (data.content || []).find(b => b.type === 'text')?.text || '';
+
+    // Strip any accidental markdown fences
+    const clean = text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+
+    // Normalize fields — ensure all required keys exist
+    parsed.fields = (parsed.fields || []).map((f, i) => ({
+      id: `field_${Date.now()}_${i}`,
+      type: f.type || 'text',
+      label: f.label || '',
+      required: f.required || false,
+      placeholder: f.placeholder || '',
+      options: f.options || [],
+      columns: f.columns || []
+    }));
+
+    res.json(parsed);
+
+  } catch (error) {
+    console.error('PDF conversion error:', error);
+    res.status(500).json({ error: 'Failed to convert PDF: ' + error.message });
+  }
+});
+
 module.exports = router;
