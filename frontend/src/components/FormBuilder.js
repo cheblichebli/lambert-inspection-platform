@@ -363,7 +363,8 @@ const FormBuilder = () => {
     const labels = {
       text: '📝 Text', number: '🔢 Number', textarea: '📄 Textarea',
       select: '🔽 Dropdown', checkbox: '☑️ Checkbox', radio: '🔘 Radio',
-      date: '📅 Date', photo: '📷 Photo', table: '📊 Table'
+      date: '📅 Date', photo: '📷 Photo', table: '📊 Table',
+      note: '📌 Note', signatories: '✍️ Signatories'
     };
     return labels[type] || type;
   };
@@ -515,11 +516,13 @@ const FormBuilder = () => {
                       <option value="date">📅 Date</option>
                       <option value="photo">📷 Photo Upload</option>
                       <option value="table">📊 Inspection Table</option>
+                      <option value="note">📌 Note / Instruction</option>
+                      <option value="signatories">✍️ Signatories / Sign-off</option>
                     </select>
                   </div>
                 </div>
 
-                {field.type !== 'checkbox' && field.type !== 'table' && (
+                {field.type !== 'checkbox' && field.type !== 'table' && field.type !== 'note' && field.type !== 'signatories' && (
                   <div className="form-group" style={{ marginBottom: '12px' }}>
                     <label style={{ fontSize: '0.8rem' }}>Placeholder text (optional)</label>
                     <input
@@ -529,6 +532,36 @@ const FormBuilder = () => {
                       placeholder="Hint shown inside the field..."
                       className="form-control"
                     />
+                  </div>
+                )}
+
+                {field.type === 'note' && (
+                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                    <label style={{ fontSize: '0.8rem' }}>Note Content</label>
+                    <textarea
+                      value={field.placeholder || ''}
+                      onChange={(e) => updateField(index, { placeholder: e.target.value })}
+                      placeholder="Enter the note or instruction text..."
+                      className="form-control"
+                      rows={3}
+                      style={{ resize: 'vertical' }}
+                    />
+                  </div>
+                )}
+
+                {field.type === 'signatories' && (
+                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                    <label style={{ fontSize: '0.8rem' }}>Roles (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={field.options?.join(', ') || ''}
+                      onChange={(e) => updateField(index, { options: e.target.value.split(',').map(o => o.trim()).filter(Boolean) })}
+                      placeholder="Project HSE Lead, Inspector, Supervisor"
+                      className="form-control"
+                    />
+                    <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>
+                      Each role gets a row with Name, Role, Signature, and Date columns
+                    </p>
                   </div>
                 )}
 
