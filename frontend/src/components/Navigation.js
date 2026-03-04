@@ -15,7 +15,7 @@ const Navigation = ({ user, onLogout, isOnline }) => {
         <div className="nav-brand">
           <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <img
-              src="/lambert-logo.jpg"
+              src="/lambert-logo-white.png"
               alt="Lambert"
               style={{ height: '40px', width: 'auto' }}
             />
