@@ -1,4 +1,5 @@
 const express = require('express');
+const axios = require('axios');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const router = express.Router();
 
@@ -185,14 +186,9 @@ Category must be exactly one of: "QA/QC", "QHSE", "Equipment Installation", "Mai
 Return only the raw JSON. No markdown. No explanation.`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
+    const anthropicResponse = await axios.post(
+      'https://api.anthropic.com/v1/messages',
+      {
         model: 'claude-opus-4-6',
         max_tokens: 2000,
         system: systemPrompt,
@@ -213,16 +209,17 @@ Return only the raw JSON. No markdown. No explanation.`;
             }
           ]
         }]
-      })
-    });
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': ANTHROPIC_API_KEY,
+          'anthropic-version': '2023-06-01'
+        }
+      }
+    );
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('Anthropic API error:', errText);
-      return res.status(500).json({ error: 'AI conversion failed: ' + response.status });
-    }
-
-    const data = await response.json();
+    const data = anthropicResponse.data;
     const text = (data.content || []).find(b => b.type === 'text')?.text || '';
 
     // Strip any accidental markdown fences
@@ -243,8 +240,9 @@ Return only the raw JSON. No markdown. No explanation.`;
     res.json(parsed);
 
   } catch (error) {
-    console.error('PDF conversion error:', error);
-    res.status(500).json({ error: 'Failed to convert PDF: ' + error.message });
+    console.error('PDF conversion error:', error.response?.data || error.message);
+    const msg = error.response?.data?.error?.message || error.response?.data?.error || error.message;
+    res.status(500).json({ error: 'Failed to convert PDF: ' + msg });
   }
 });
 
