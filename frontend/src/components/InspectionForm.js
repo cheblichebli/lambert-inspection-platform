@@ -331,8 +331,35 @@ const InspectionForm = ({ user }) => {
 
       case 'table':
         var columns = field.columns || [];
-        var getColType = function(col) { return col.startsWith('check:') ? 'check' : col.startsWith('date:') ? 'date' : 'text'; };
-        var getColLabel = function(col) { return col.replace(/^(text:|check:|date:)/, ''); };
+        // Column format: "type:Label" or "GroupName > type:Label"
+        var getColGroup = function(col) {
+          return col.includes(' > ') ? col.split(' > ')[0].trim() : null;
+        };
+        var getColCore = function(col) {
+          return col.includes(' > ') ? col.split(' > ')[1].trim() : col;
+        };
+        var getColType = function(col) {
+          var core = getColCore(col);
+          return core.startsWith('check:') ? 'check' : core.startsWith('date:') ? 'date' : 'text';
+        };
+        var getColLabel = function(col) {
+          return getColCore(col).replace(/^(text:|check:|date:)/, '');
+        };
+
+        // Build group header row if any columns have groups
+        var hasGroups = columns.some(function(col) { return getColGroup(col) !== null; });
+        var groupHeaders = [];
+        if (hasGroups) {
+          var gi = 0;
+          while (gi < columns.length) {
+            var grp = getColGroup(columns[gi]);
+            var span = 1;
+            while (gi + span < columns.length && getColGroup(columns[gi + span]) === grp) span++;
+            groupHeaders.push({ label: grp || '', span: span });
+            gi += span;
+          }
+        }
+
         var rows = formData[field.id] || [{}];
 
         var updateCell = function(rowIdx, colIdx, val) {
@@ -358,6 +385,22 @@ const InspectionForm = ({ user }) => {
           <div style={{ overflowX: 'auto', marginTop: '8px' }}>
             <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.875rem', minWidth: '500px' }}>
               <thead>
+                {hasGroups && (
+                  <tr>
+                    {groupHeaders.map(function(gh, ghi) {
+                      return (
+                        <th key={ghi} colSpan={gh.span} style={{
+                          border: '1px solid #e2e8f0', padding: '6px 10px',
+                          background: '#e2e8f0', color: '#1e293b', fontWeight: 700,
+                          textAlign: 'center', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em'
+                        }}>
+                          {gh.label}
+                        </th>
+                      );
+                    })}
+                    <th style={{ border: '1px solid #e2e8f0', background: '#e2e8f0', width: '36px' }}></th>
+                  </tr>
+                )}
                 <tr>
                   {columns.map(function(col, ci) {
                     return (
