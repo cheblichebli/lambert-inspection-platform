@@ -86,7 +86,7 @@ const InspectionDetail = ({ user }) => {
       const isTrue = value === true || value === 'true';
       return (
         <span style={{ color: isTrue ? '#10b981' : '#ef4444', fontWeight: 500 }}>
-          {isTrue ? '\u2713 Yes' : '\u2717 No'}
+          {isTrue ? '✓ Yes' : '✗ No'}
         </span>
       );
     }
@@ -158,9 +158,9 @@ const InspectionDetail = ({ user }) => {
                     }}>
                       {colType === 'check'
                         ? (cellVal === true || cellVal === 'true'
-                            ? <span style={{ color: '#10b981', fontSize: '1.1rem' }}>\u2713</span>
-                            : <span style={{ color: '#cbd5e1' }}>\u2014</span>)
-                        : (cellVal || <span style={{ color: '#cbd5e1' }}>\u2014</span>)
+                            ? <span style={{ color: '#10b981', fontSize: '1.1rem' }}>✓</span>
+                            : <span style={{ color: '#cbd5e1' }}>—</span>)
+                        : (cellVal || <span style={{ color: '#cbd5e1' }}>—</span>)
                       }
                     </td>
                   );
