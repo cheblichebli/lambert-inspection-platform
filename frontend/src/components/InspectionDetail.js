@@ -79,16 +79,67 @@ const InspectionDetail = ({ user }) => {
   const renderFieldValue = (field, value) => {
     if (value === null || value === undefined || value === '') return null;
     if (field && field.type === 'photo') return null;
+    if (field && field.type === 'table') return null;
     if ((field && field.type === 'checkbox') || typeof value === 'boolean') {
       const isTrue = value === true || value === 'true';
       return (
         <span style={{ color: isTrue ? '#10b981' : '#ef4444', fontWeight: 500 }}>
-          {isTrue ? '✓ Yes' : '✗ No'}
+          {isTrue ? '\u2713 Yes' : '\u2717 No'}
         </span>
       );
     }
     if (Array.isArray(value)) return <span>{value.join(', ')}</span>;
     return <span>{value.toString()}</span>;
+  };
+
+  const renderTableField = (field, rows) => {
+    if (!rows || !Array.isArray(rows) || rows.length === 0) return null;
+    const columns = field.columns || [];
+    if (columns.length === 0) return null;
+    const getColType = (col) => col.startsWith('check:') ? 'check' : col.startsWith('date:') ? 'date' : 'text';
+    const getColLabel = (col) => col.replace(/^(text:|check:|date:)/, '');
+    return (
+      <div style={{ overflowX: 'auto', marginTop: '8px' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.875rem', minWidth: '400px' }}>
+          <thead>
+            <tr>
+              {columns.map((col, ci) => (
+                <th key={ci} style={{
+                  border: '1px solid #e2e8f0', padding: '8px 12px',
+                  background: '#f1f5f9', color: '#374151', fontWeight: 600,
+                  whiteSpace: 'nowrap', textAlign: getColType(col) === 'check' ? 'center' : 'left'
+                }}>
+                  {getColLabel(col)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, ri) => (
+              <tr key={ri} style={{ background: ri % 2 === 0 ? 'white' : '#f8fafc' }}>
+                {columns.map((col, ci) => {
+                  const colType = getColType(col);
+                  const cellVal = row[ci];
+                  return (
+                    <td key={ci} style={{
+                      border: '1px solid #e2e8f0', padding: '8px 12px',
+                      textAlign: colType === 'check' ? 'center' : 'left', color: '#4b5563'
+                    }}>
+                      {colType === 'check'
+                        ? (cellVal === true || cellVal === 'true'
+                            ? <span style={{ color: '#10b981', fontSize: '1.1rem' }}>\u2713</span>
+                            : <span style={{ color: '#cbd5e1' }}>\u2014</span>)
+                        : (cellVal || <span style={{ color: '#cbd5e1' }}>\u2014</span>)
+                      }
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
   const hasGPS = inspection.gps_latitude && inspection.gps_longitude;
@@ -156,6 +207,17 @@ const InspectionDetail = ({ user }) => {
             if (field && field.type === 'photo') return null;
             if (value === null || value === undefined || value === '') return null;
             var label = (field && field.label) ? field.label : key;
+
+            // Table fields get full-width rendering
+            if (field && field.type === 'table') {
+              return (
+                <div key={key} style={{ padding: '8px 0', borderBottom: '1px solid #f1f5f9' }}>
+                  <strong style={{ color: '#374151', display: 'block', marginBottom: '8px' }}>{label}:</strong>
+                  {renderTableField(field, value)}
+                </div>
+              );
+            }
+
             var rendered = renderFieldValue(field, value);
             if (rendered === null) return null;
             return (
