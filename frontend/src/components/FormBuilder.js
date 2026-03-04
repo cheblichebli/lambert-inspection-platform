@@ -30,87 +30,24 @@ const PDFConverterModal = ({ onClose, onFormGenerated }) => {
       const base64Data = await readFileAsBase64(file);
       setProgress('Analyzing form structure with AI...');
 
-      const systemPrompt = `You are a form digitization expert. Analyze the PDF form image and extract its structure into a digital form definition.
-
-Return ONLY a valid JSON object with this exact structure, no markdown, no explanation:
-{
-  "title": "form title",
-  "category": "QA/QC",
-  "description": "brief description",
-  "fields": [
-    {
-      "id": "field_1",
-      "type": "text|number|textarea|select|checkbox|radio|date|photo|table",
-      "label": "field label",
-      "required": false,
-      "placeholder": "",
-      "options": [],
-      "columns": []
-    }
-  ]
-}
-
-Field type rules:
-- Text lines → "text"
-- Multi-line text areas → "textarea"  
-- Dropdown lists → "select" with options array
-- Single checkboxes (yes/no, tick boxes) → "checkbox"
-- Multiple choice (pick one) → "radio" with options array
-- Date fields → "date"
-- Photo/image areas → "photo"
-- Tables with repeating rows (checklists, item lists) → "table" with columns array
-
-For "table" type, columns array should be like:
-["Item No.", "Description", "OK", "BAD", "Repair", "Add", "Replace", "Assigned To", "Planned Date", "Completion Date"]
-
-Column types within a table:
-- Short text columns → prefix with "text:"
-- Checkbox columns (OK, BAD, Repair, etc.) → prefix with "check:"
-- Date columns → prefix with "date:"
-
-So columns for the equipment checklist would be:
-["text:Item No.", "text:Description", "check:OK", "check:BAD", "check:Repair", "check:Add", "check:Replace", "text:Assigned To", "date:Planned Date", "date:Completion Date"]
-
-Category must be one of: "QA/QC", "QHSE", "Equipment Installation", "Maintenance"`;
-
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      // Call backend — avoids CORS and keeps API key secure on the server
+      const token = localStorage.getItem('token');
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_URL}/system/convert-pdf-form`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: [{
-            role: 'user',
-            content: [{
-              type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: base64Data }
-            }, {
-              type: 'text',
-              text: 'Convert this form to a digital form definition. Return only the JSON object.'
-            }]
-          }]
-        })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ pdfBase64: base64Data })
       });
 
-      const data = await response.json();
-      setProgress('Parsing form structure...');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Server error ' + response.status);
+      }
 
-      const text = data.content?.find(b => b.type === 'text')?.text || '';
-      const clean = text.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
-
-      // Normalize fields
-      parsed.fields = parsed.fields.map((f, i) => ({
-        id: `field_${Date.now()}_${i}`,
-        type: f.type || 'text',
-        label: f.label || '',
-        required: f.required || false,
-        placeholder: f.placeholder || '',
-        options: f.options || [],
-        columns: f.columns || []
-      }));
-
+      const parsed = await response.json();
       setProgress('Done!');
       setTimeout(() => {
         onFormGenerated(parsed);
@@ -119,7 +56,7 @@ Category must be one of: "QA/QC", "QHSE", "Equipment Installation", "Maintenance
 
     } catch (err) {
       console.error(err);
-      setError('Failed to convert PDF. Please try again or build the form manually.');
+      setError(err.message || 'Failed to convert PDF. Please try again or build the form manually.');
     } finally {
       setLoading(false);
     }
