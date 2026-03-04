@@ -154,8 +154,29 @@ const TableColumnEditor = ({ columns, onChange }) => {
 
   const removeColumn = (idx) => onChange(columns.filter((_, i) => i !== idx));
 
-  const getType = (col) => col.startsWith('check:') ? 'check' : col.startsWith('date:') ? 'date' : 'text';
-  const getLabel = (col) => col.replace(/^(text:|check:|date:)/, '');
+  const getColGroup = (col) => col.includes(' > ') ? col.split(' > ')[0].trim() : '';
+  const getColCore = (col) => col.includes(' > ') ? col.split(' > ')[1].trim() : col;
+  const getType = (col) => { const c = getColCore(col); return c.startsWith('check:') ? 'check' : c.startsWith('date:') ? 'date' : 'text'; };
+  const getLabel = (col) => getColCore(col).replace(/^(text:|check:|date:)/, '');
+
+  const buildCol = (group, type, label) => {
+    const core = `${type}:${label}`;
+    return group ? `${group} > ${core}` : core;
+  };
+
+  // Compute group headers for preview
+  const hasGroups = columns.some(col => getColGroup(col) !== '');
+  const groupHeaders = [];
+  if (hasGroups) {
+    let gi = 0;
+    while (gi < columns.length) {
+      const grp = getColGroup(columns[gi]);
+      let span = 1;
+      while (gi + span < columns.length && getColGroup(columns[gi + span]) === grp) span++;
+      groupHeaders.push({ label: grp, span });
+      gi += span;
+    }
+  }
 
   return (
     <div style={{ marginTop: '12px', background: '#f8fafc', borderRadius: '8px', padding: '16px' }}>
@@ -166,7 +187,7 @@ const TableColumnEditor = ({ columns, onChange }) => {
         <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
           <select
             value={getType(col)}
-            onChange={(e) => updateColumn(idx, `${e.target.value}:${getLabel(col)}`)}
+            onChange={(e) => updateColumn(idx, buildCol(getColGroup(col), e.target.value, getLabel(col)))}
             style={{ padding: '6px 8px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.8rem', background: 'white', width: '90px', flexShrink: 0 }}
           >
             <option value="text">Text</option>
@@ -176,15 +197,28 @@ const TableColumnEditor = ({ columns, onChange }) => {
           <input
             type="text"
             value={getLabel(col)}
-            onChange={(e) => updateColumn(idx, `${getType(col)}:${e.target.value}`)}
+            onChange={(e) => updateColumn(idx, buildCol(getColGroup(col), getType(col), e.target.value))}
             placeholder="Column name"
             style={{ flex: 1, padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.875rem' }}
+          />
+          <input
+            type="text"
+            value={getColGroup(col)}
+            onChange={(e) => updateColumn(idx, buildCol(e.target.value, getType(col), getLabel(col)))}
+            placeholder="Group (optional)"
+            title="Group header name (e.g. CONDITION, ACTION)"
+            style={{ width: '110px', padding: '6px 10px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '0.8rem', color: '#64748b', flexShrink: 0 }}
           />
           <button onClick={() => removeColumn(idx)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '4px' }}>
             <X size={16} />
           </button>
         </div>
       ))}
+      {columns.length > 0 && (
+        <p style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '4px', marginBottom: '8px' }}>
+          💡 Fill "Group" field to add spanning headers (e.g. CONDITION, ACTION)
+        </p>
+      )}
       <button
         onClick={addColumn}
         style={{ marginTop: '4px', padding: '6px 12px', border: '1px dashed #cbd5e1', borderRadius: '6px', background: 'white', cursor: 'pointer', fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}
@@ -198,6 +232,19 @@ const TableColumnEditor = ({ columns, onChange }) => {
           <p style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '6px' }}>Preview:</p>
           <table style={{ borderCollapse: 'collapse', fontSize: '0.75rem', width: '100%' }}>
             <thead>
+              {hasGroups && (
+                <tr>
+                  {groupHeaders.map((gh, ghi) => (
+                    <th key={ghi} colSpan={gh.span} style={{
+                      border: '1px solid #e2e8f0', padding: '4px 10px',
+                      background: '#e2e8f0', fontWeight: 700, textAlign: 'center',
+                      fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em'
+                    }}>
+                      {gh.label}
+                    </th>
+                  ))}
+                </tr>
+              )}
               <tr>
                 {columns.map((col, i) => (
                   <th key={i} style={{ border: '1px solid #e2e8f0', padding: '6px 10px', background: '#f1f5f9', color: '#374151', fontWeight: 600, whiteSpace: 'nowrap' }}>
