@@ -4,7 +4,22 @@ import { inspectionsAPI } from '../api';
 import { CheckCircle, XCircle, ArrowLeft, Download } from 'lucide-react';
 
 // ── PDF Export ────────────────────────────────────────────────────────────────
-const generateInspectionPDF = (inspection, formData, templateFields, gpsAddress) => {
+const generateInspectionPDF = async (inspection, formData, templateFields, gpsAddress) => {
+  // Fetch logo as base64
+  let logoHTML = `<div style="width:52px;height:52px;background:#4a9d5f;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-size:22px;font-weight:900;flex-shrink:0;">L</div>`;
+  try {
+    const logoUrl = window.location.origin + '/lambert-logo.jpg';
+    const resp = await fetch(logoUrl);
+    if (resp.ok) {
+      const blob = await resp.blob();
+      const b64 = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+      logoHTML = `<img src="${b64}" alt="Lambert Logo" style="height:52px;width:auto;object-fit:contain;flex-shrink:0;" />`;
+    }
+  } catch(e) {}
   const fieldMap = {};
   templateFields.forEach(f => { fieldMap[f.id] = f; });
 
@@ -241,14 +256,35 @@ const generateInspectionPDF = (inspection, formData, templateFields, gpsAddress)
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1e293b; background: white; }
-    @page { size: A4; margin: 15mm 15mm 20mm 15mm; }
+    @page {
+      size: A4;
+      margin: 15mm 15mm 20mm 15mm;
+      /* Remove browser-added URL and date headers/footers */
+      @top-left { content: ''; }
+      @top-right { content: ''; }
+      @bottom-left { content: ''; }
+      @bottom-right { content: ''; }
+    }
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .no-print { display: none !important; }
     }
   </style>
+  <script>
+    window.onload = function() {
+      // Small delay to ensure images load before printing
+      setTimeout(function() { window.print(); }, 1200);
+    };
+  </script>
 </head>
 <body>
+
+  <!-- Save instructions bar - hidden when printing -->
+  <div class="no-print" style="position:fixed;top:0;left:0;right:0;z-index:9999;background:#1e293b;color:white;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;font-family:sans-serif;font-size:13px;">
+    <span>📄 Your PDF report is ready. In the print dialog, select <strong>"Save as PDF"</strong> as the destination.</span>
+    <button onclick="window.print()" style="background:#4a9d5f;color:white;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🖨 Print / Save PDF</button>
+  </div>
+  <div class="no-print" style="height:44px;"></div>
 
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:16px;border-bottom:3px solid #4a9d5f;margin-bottom:20px;">
@@ -338,12 +374,17 @@ const generateInspectionPDF = (inspection, formData, templateFields, gpsAddress)
 </body>
 </html>`;
 
-  // Open in new window and trigger print
-  const win = window.open('', '_blank');
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => { win.print(); }, 800);
+  // Trigger direct download as HTML file (opens in browser as self-contained PDF-ready page)
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeName = (inspection.template_title || 'Inspection').replace(/[^a-z0-9]/gi, '_');
+  a.href = url;
+  a.download = `INS-${String(inspection.id).padStart(5,'0')}_${safeName}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
