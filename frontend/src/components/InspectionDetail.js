@@ -80,6 +80,8 @@ const InspectionDetail = ({ user }) => {
     if (value === null || value === undefined || value === '') return null;
     if (field && field.type === 'photo') return null;
     if (field && field.type === 'table') return null;
+    if (field && field.type === 'note') return null;
+    if (field && field.type === 'signatories') return null;
     if ((field && field.type === 'checkbox') || typeof value === 'boolean') {
       const isTrue = value === true || value === 'true';
       return (
@@ -236,6 +238,61 @@ const InspectionDetail = ({ user }) => {
             if (field && field.type === 'photo') return null;
             if (value === null || value === undefined || value === '') return null;
             var label = (field && field.label) ? field.label : key;
+
+            // Note fields
+            if (field && field.type === 'note') {
+              return (
+                <div key={key} style={{ gridColumn: '1 / -1', marginBottom: '12px' }}>
+                  <div style={{
+                    background: '#fffbeb', border: '1px solid #fcd34d',
+                    borderLeft: '4px solid #f59e0b', borderRadius: '6px',
+                    padding: '12px 16px'
+                  }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                      <span style={{ fontSize: '1rem', flexShrink: 0 }}>📌</span>
+                      <p style={{ margin: 0, fontSize: '0.875rem', color: '#92400e', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                        {field.placeholder || field.label}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Signatories fields
+            if (field && field.type === 'signatories') {
+              const sigRows = Array.isArray(value) ? value : [];
+              const roles = field.options && field.options.length > 0 ? field.options : sigRows.map(r => r.role).filter(Boolean);
+              const displayRows = roles.length > 0 ? roles.map((role, ri) => sigRows[ri] || { role, name: '', signature: '', date: '' }) : sigRows;
+              return (
+                <div key={key} style={{ gridColumn: '1 / -1', marginBottom: '16px' }}>
+                  <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
+                    {field.label}
+                  </p>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.875rem' }}>
+                      <thead>
+                        <tr>
+                          {['Name', 'Role', 'Signature', 'Date'].map(h => (
+                            <th key={h} style={{ border: '1px solid #e2e8f0', padding: '8px 12px', background: '#f1f5f9', color: '#374151', fontWeight: 600, textAlign: 'left' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {displayRows.map((row, ri) => (
+                          <tr key={ri} style={{ background: ri % 2 === 0 ? 'white' : '#f8fafc' }}>
+                            <td style={{ border: '1px solid #e2e8f0', padding: '8px 12px', color: '#4b5563' }}>{row.name || <span style={{ color: '#cbd5e1' }}>—</span>}</td>
+                            <td style={{ border: '1px solid #e2e8f0', padding: '8px 12px', color: '#374151', fontWeight: 500 }}>{row.role || <span style={{ color: '#cbd5e1' }}>—</span>}</td>
+                            <td style={{ border: '1px solid #e2e8f0', padding: '8px 12px', color: '#4b5563', fontFamily: 'cursive' }}>{row.signature || <span style={{ color: '#cbd5e1', fontFamily: 'inherit' }}>—</span>}</td>
+                            <td style={{ border: '1px solid #e2e8f0', padding: '8px 12px', color: '#4b5563' }}>{row.date || <span style={{ color: '#cbd5e1' }}>—</span>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            }
 
             // Table fields get full-width rendering
             if (field && field.type === 'table') {
