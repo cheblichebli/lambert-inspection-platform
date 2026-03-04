@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { formsAPI } from '../api';
+import { formsAPI, systemAPI } from '../api';
 import { Plus, Trash2, Save, FileText, Sparkles, X, GripVertical, Table, ChevronDown, ChevronUp } from 'lucide-react';
 
 // ── AI PDF Converter Modal ────────────────────────────────────────────────────
@@ -30,24 +30,9 @@ const PDFConverterModal = ({ onClose, onFormGenerated }) => {
       const base64Data = await readFileAsBase64(file);
       setProgress('Analyzing form structure with AI...');
 
-      // Call backend — avoids CORS and keeps API key secure on the server
-      const token = localStorage.getItem('token');
-      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${API_URL}/system/convert-pdf-form`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ pdfBase64: base64Data })
-      });
+      // Use systemAPI which goes through the axios instance with auth interceptor
+      const parsed = await systemAPI.convertPdfForm(base64Data);
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || 'Server error ' + response.status);
-      }
-
-      const parsed = await response.json();
       setProgress('Done!');
       setTimeout(() => {
         onFormGenerated(parsed);
@@ -56,7 +41,7 @@ const PDFConverterModal = ({ onClose, onFormGenerated }) => {
 
     } catch (err) {
       console.error(err);
-      setError(err.message || 'Failed to convert PDF. Please try again or build the form manually.');
+      setError(err.response?.data?.error || err.message || 'Failed to convert PDF. Please try again or build the form manually.');
     } finally {
       setLoading(false);
     }
