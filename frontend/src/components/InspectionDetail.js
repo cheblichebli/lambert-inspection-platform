@@ -48,12 +48,10 @@ const InspectionDetail = ({ user }) => {
   if (loading) return <div className="loading-container"><div className="spinner"></div></div>;
   if (!inspection) return <div>Inspection not found</div>;
 
-  // Parse form data
   const formData = typeof inspection.data === 'string'
     ? JSON.parse(inspection.data)
     : (inspection.data || {});
 
-  // Parse template fields to get human-readable labels
   const templateFields = (() => {
     try {
       const raw = inspection.template_fields;
@@ -62,22 +60,12 @@ const InspectionDetail = ({ user }) => {
     } catch { return []; }
   })();
 
-  // Build a map: fieldId -> field definition
   const fieldMap = {};
-  templateFields.forEach(field => {
-    fieldMap[field.id] = field;
-  });
+  templateFields.forEach(field => { fieldMap[field.id] = field; });
 
-  // Render a single form field value nicely
   const renderFieldValue = (field, value) => {
-    if (value === null || value === undefined || value === '') {
-      return <span style={{ color: '#94a3b8' }}>—</span>;
-    }
-
-    // Photo fields — skip here, handled in photos section
+    if (value === null || value === undefined || value === '') return null;
     if (field?.type === 'photo') return null;
-
-    // Checkbox / boolean
     if (field?.type === 'checkbox' || typeof value === 'boolean') {
       return (
         <span style={{
@@ -89,26 +77,17 @@ const InspectionDetail = ({ user }) => {
         </span>
       );
     }
-
-    // Array (multi-select)
-    if (Array.isArray(value)) {
-      return <span>{value.join(', ')}</span>;
-    }
-
+    if (Array.isArray(value)) return <span>{value.join(', ')}</span>;
     return <span>{value.toString()}</span>;
   };
 
-  // Get GPS string
   const hasGPS = inspection.gps_latitude && inspection.gps_longitude;
   const gpsString = hasGPS
     ? `${parseFloat(inspection.gps_latitude).toFixed(6)}, ${parseFloat(inspection.gps_longitude).toFixed(6)}${inspection.gps_accuracy ? ` (±${Math.round(inspection.gps_accuracy)}m)` : ''}`
     : null;
 
   const statusColors = {
-    draft: '#64748b',
-    submitted: '#3b82f6',
-    approved: '#10b981',
-    rejected: '#ef4444'
+    draft: '#64748b', submitted: '#3b82f6', approved: '#10b981', rejected: '#ef4444'
   };
 
   return (
@@ -118,18 +97,14 @@ const InspectionDetail = ({ user }) => {
       </button>
 
       <div className="inspection-detail">
+
         {/* Header */}
         <div style={{ marginBottom: '24px' }}>
           <h1 style={{ marginBottom: '8px' }}>{inspection.template_title}</h1>
           <span style={{
-            display: 'inline-block',
-            padding: '4px 12px',
-            borderRadius: '12px',
+            display: 'inline-block', padding: '4px 12px', borderRadius: '12px',
             background: statusColors[inspection.status] || '#64748b',
-            color: 'white',
-            fontSize: '0.875rem',
-            fontWeight: 600,
-            textTransform: 'capitalize'
+            color: 'white', fontSize: '0.875rem', fontWeight: 600, textTransform: 'capitalize'
           }}>
             {inspection.status}
           </span>
@@ -155,29 +130,20 @@ const InspectionDetail = ({ user }) => {
           )}
         </div>
 
-        {/* Form Data — with real field labels */}
+        {/* Form Data */}
         <div className="detail-section">
           <h2>Form Data</h2>
           {Object.entries(formData).map(([key, value]) => {
             const field = fieldMap[key];
-
-            // Skip photo fields here
             if (field?.type === 'photo') return null;
-
-            // Skip null/empty
             if (value === null || value === undefined || value === '') return null;
-
             const label = field?.label || key;
             const rendered = renderFieldValue(field, value);
             if (rendered === null) return null;
-
             return (
               <div key={key} style={{
-                display: 'flex',
-                gap: '8px',
-                padding: '8px 0',
-                borderBottom: '1px solid #f1f5f9',
-                alignItems: 'flex-start'
+                display: 'flex', gap: '8px', padding: '8px 0',
+                borderBottom: '1px solid #f1f5f9', alignItems: 'flex-start'
               }}>
                 <strong style={{ minWidth: '180px', color: '#374151' }}>{label}:</strong>
                 <span style={{ color: '#4b5563' }}>{rendered}</span>
@@ -189,7 +155,10 @@ const InspectionDetail = ({ user }) => {
         {/* GPS Location */}
         {hasGPS && (
           <div className="detail-section">
-            <h2><MapPin size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />GPS Location</h2>
+            <h2>
+              <MapPin size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />
+              GPS Location
+            </h2>
             <p style={{ marginBottom: '8px' }}>{gpsString}</p>
             
               href={`https://www.google.com/maps?q=${inspection.gps_latitude},${inspection.gps_longitude}`}
@@ -206,13 +175,13 @@ const InspectionDetail = ({ user }) => {
         {/* Inspector Signature */}
         {inspection.inspector_signature && (
           <div className="detail-section">
-            <h2><PenTool size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />Inspector Signature</h2>
+            <h2>
+              <PenTool size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />
+              Inspector Signature
+            </h2>
             <div style={{
-              border: '1px solid #e2e8f0',
-              borderRadius: '8px',
-              padding: '12px',
-              background: '#f8fafc',
-              display: 'inline-block'
+              border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px',
+              background: '#f8fafc', display: 'inline-block'
             }}>
               <img
                 src={inspection.inspector_signature}
@@ -231,13 +200,13 @@ const InspectionDetail = ({ user }) => {
         {/* Supervisor Signature */}
         {inspection.supervisor_signature && (
           <div className="detail-section">
-            <h2><PenTool size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />Supervisor Signature</h2>
+            <h2>
+              <PenTool size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />
+              Supervisor Signature
+            </h2>
             <div style={{
-              border: '1px solid #e2e8f0',
-              borderRadius: '8px',
-              padding: '12px',
-              background: '#f8fafc',
-              display: 'inline-block'
+              border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px',
+              background: '#f8fafc', display: 'inline-block'
             }}>
               <img
                 src={inspection.supervisor_signature}
@@ -262,26 +231,19 @@ const InspectionDetail = ({ user }) => {
               marginTop: '12px'
             }}>
               {inspection.photos.map((photo, idx) => (
-                <div key={idx} style={{ position: 'relative' }}>
+                <div key={idx}>
                   <img
                     src={photo.photo_data}
                     alt={photo.caption || `Photo ${idx + 1}`}
                     onClick={() => setExpandedPhoto(photo)}
                     style={{
-                      width: '100%',
-                      height: '160px',
-                      objectFit: 'cover',
-                      borderRadius: '8px',
-                      cursor: 'pointer',
-                      border: '1px solid #e2e8f0',
-                      display: 'block'
+                      width: '100%', height: '160px', objectFit: 'cover',
+                      borderRadius: '8px', cursor: 'pointer',
+                      border: '1px solid #e2e8f0', display: 'block'
                     }}
                   />
                   {photo.caption && (
-                    <p style={{
-                      fontSize: '12px', color: '#64748b',
-                      marginTop: '4px', textAlign: 'center'
-                    }}>
+                    <p style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', textAlign: 'center' }}>
                       {photo.caption}
                     </p>
                   )}
@@ -341,20 +303,23 @@ const InspectionDetail = ({ user }) => {
             </button>
           </div>
         )}
+
       </div>
 
-      {/* Lightbox for expanded photo */}
+      {/* Lightbox */}
       {expandedPhoto && (
         <div
           onClick={() => setExpandedPhoto(null)}
           style={{
-            position: 'fixed', inset: 0,
-            background: 'rgba(0,0,0,0.85)',
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             zIndex: 9999, cursor: 'zoom-out', padding: '20px'
           }}
         >
-          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}
+          >
             <img
               src={expandedPhoto.photo_data}
               alt={expandedPhoto.caption || 'Photo'}
@@ -373,10 +338,13 @@ const InspectionDetail = ({ user }) => {
                 width: '32px', height: '32px', cursor: 'pointer',
                 fontSize: '16px', fontWeight: 'bold', color: '#374151'
               }}
-            >✕</button>
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}
+
     </div>
   );
 };
