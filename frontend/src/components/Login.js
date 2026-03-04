@@ -36,7 +36,7 @@ const Login = ({ onLogin }) => {
       <div className="login-card">
         <div className="login-header">
           <img 
-            src="/lambert-logo.jpg" 
+            src="/lambert-logo-green.png" 
             alt="Lambert Electromec" 
             style={{ maxWidth: '280px', height: 'auto', marginBottom: '20px' }}
           />
