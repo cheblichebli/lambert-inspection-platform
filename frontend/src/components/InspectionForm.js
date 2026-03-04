@@ -329,6 +329,118 @@ const InspectionForm = ({ user }) => {
           </div>
         );
 
+      case 'table':
+        var columns = field.columns || [];
+        var getColType = function(col) { return col.startsWith('check:') ? 'check' : col.startsWith('date:') ? 'date' : 'text'; };
+        var getColLabel = function(col) { return col.replace(/^(text:|check:|date:)/, ''); };
+        var rows = formData[field.id] || [{}];
+
+        var updateCell = function(rowIdx, colIdx, val) {
+          var current = formData[field.id] || [{}];
+          var newRows = current.map(function(r) { return Object.assign({}, r); });
+          if (!newRows[rowIdx]) newRows[rowIdx] = {};
+          newRows[rowIdx][colIdx] = val;
+          handleFieldChange(field.id, newRows);
+        };
+
+        var addRow = function() {
+          var current = formData[field.id] || [{}];
+          handleFieldChange(field.id, [...current, {}]);
+        };
+
+        var removeRow = function(rowIdx) {
+          var current = formData[field.id] || [{}];
+          if (current.length <= 1) return;
+          handleFieldChange(field.id, current.filter(function(_, i) { return i !== rowIdx; }));
+        };
+
+        return (
+          <div style={{ overflowX: 'auto', marginTop: '8px' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.875rem', minWidth: '500px' }}>
+              <thead>
+                <tr>
+                  {columns.map(function(col, ci) {
+                    return (
+                      <th key={ci} style={{
+                        border: '1px solid #e2e8f0',
+                        padding: '8px 10px',
+                        background: '#f1f5f9',
+                        color: '#374151',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        textAlign: getColType(col) === 'check' ? 'center' : 'left'
+                      }}>
+                        {getColLabel(col)}
+                      </th>
+                    );
+                  })}
+                  <th style={{ border: '1px solid #e2e8f0', padding: '8px', background: '#f1f5f9', width: '36px' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(function(row, ri) {
+                  return (
+                    <tr key={ri} style={{ background: ri % 2 === 0 ? 'white' : '#fafafa' }}>
+                      {columns.map(function(col, ci) {
+                        var colType = getColType(col);
+                        var cellVal = row[ci];
+                        return (
+                          <td key={ci} style={{ border: '1px solid #e2e8f0', padding: '4px 6px', textAlign: colType === 'check' ? 'center' : 'left' }}>
+                            {colType === 'check' && (
+                              <input
+                                type="checkbox"
+                                checked={cellVal === true || cellVal === 'true'}
+                                onChange={function(e) { updateCell(ri, ci, e.target.checked); }}
+                                style={{ width: '18px', height: '18px', accentColor: '#4a9d5f', cursor: 'pointer' }}
+                              />
+                            )}
+                            {colType === 'date' && (
+                              <input
+                                type="date"
+                                value={cellVal || ''}
+                                onChange={function(e) { updateCell(ri, ci, e.target.value); }}
+                                style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', width: '120px' }}
+                              />
+                            )}
+                            {colType === 'text' && (
+                              <input
+                                type="text"
+                                value={cellVal || ''}
+                                onChange={function(e) { updateCell(ri, ci, e.target.value); }}
+                                style={{ border: 'none', background: 'transparent', width: '100%', minWidth: '60px', fontSize: '0.875rem', padding: '2px 4px' }}
+                              />
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td style={{ border: '1px solid #e2e8f0', padding: '4px', textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={function() { removeRow(ri); }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '2px', lineHeight: 1 }}
+                        >
+                          ×
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <button
+              type="button"
+              onClick={addRow}
+              style={{
+                marginTop: '8px', padding: '6px 14px', border: '1px dashed #4a9d5f',
+                borderRadius: '6px', background: 'white', cursor: 'pointer',
+                fontSize: '0.8rem', color: '#4a9d5f', fontWeight: 600
+              }}
+            >
+              + Add Row
+            </button>
+          </div>
+        );
+
       default:
         return <p className="text-muted">Unsupported field type</p>;
     }
