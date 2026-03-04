@@ -88,13 +88,19 @@ router.put('/:id', authenticateToken, authorizeRoles('admin'), async (req, res) 
   const { title, category, description, fields, isActive } = req.body;
   
   try {
+    // Only update is_active if explicitly provided, otherwise preserve existing value
+    const activeClause = isActive !== undefined ? ', is_active = $5' : '';
+    const params = [title, category, description, JSON.stringify(fields)];
+    if (isActive !== undefined) params.push(isActive);
+    params.push(id);
+
     const result = await pool.query(
       `UPDATE form_templates
-       SET title = $1, category = $2, description = $3, fields = $4, 
-           is_active = $5, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $6
+       SET title = $1, category = $2, description = $3, fields = $4
+           ${activeClause}, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $${params.length}
        RETURNING *`,
-      [title, category, description, JSON.stringify(fields), isActive, id]
+      params
     );
 
     if (result.rows.length === 0) {
