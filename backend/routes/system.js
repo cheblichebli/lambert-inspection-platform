@@ -18,7 +18,7 @@ router.get('/audit-logs', authenticateToken, authorizeRoles('admin'), async (req
     let p = 0;
 
     if (userId) {
-      p++; query += ` AND a.user_id = $${p}`; params.push(userId);
+      p++; query += ` AND a.user_id = $${p}`; params.push(parseInt(userId));
     }
     if (action) {
       p++; query += ` AND a.action LIKE $${p}`; params.push(`%${action}%`);
@@ -27,18 +27,20 @@ router.get('/audit-logs', authenticateToken, authorizeRoles('admin'), async (req
       p++; query += ` AND u.role = $${p}`; params.push(role);
     }
     if (dateFrom) {
-      p++; query += ` AND a.created_at >= $${p}`; params.push(new Date(dateFrom));
+      p++;
+      query += ` AND a.created_at >= $${p}::timestamptz`;
+      params.push(new Date(dateFrom).toISOString());
     }
     if (dateTo) {
-      p++; query += ` AND a.created_at <= $${p}`; 
-      // Include full day
+      p++;
       const end = new Date(dateTo);
       end.setHours(23, 59, 59, 999);
-      params.push(end);
+      query += ` AND a.created_at <= $${p}::timestamptz`;
+      params.push(end.toISOString());
     }
 
-    query += ` ORDER BY a.created_at DESC LIMIT $${p+1} OFFSET $${p+2}`;
-    params.push(limit, offset);
+    query += ` ORDER BY a.created_at DESC LIMIT $${p + 1} OFFSET $${p + 2}`;
+    params.push(parseInt(limit), parseInt(offset));
 
     const result = await pool.query(query, params);
 
@@ -51,16 +53,20 @@ router.get('/audit-logs', authenticateToken, authorizeRoles('admin'), async (req
     const countParams = [];
     let cp = 0;
 
-    if (userId) { cp++; countQuery += ` AND a.user_id = $${cp}`; countParams.push(userId); }
-    if (action) { cp++; countQuery += ` AND a.action LIKE $${cp}`; countParams.push(`%${action}%`); }
-    if (role)   { cp++; countQuery += ` AND u.role = $${cp}`; countParams.push(role); }
-    if (dateFrom) { cp++; countQuery += ` AND a.created_at >= $${cp}`; countParams.push(new Date(dateFrom)); }
+    if (userId)   { cp++; countQuery += ` AND a.user_id = $${cp}`;       countParams.push(parseInt(userId)); }
+    if (action)   { cp++; countQuery += ` AND a.action LIKE $${cp}`;     countParams.push(`%${action}%`); }
+    if (role)     { cp++; countQuery += ` AND u.role = $${cp}`;           countParams.push(role); }
+    if (dateFrom) {
+      cp++;
+      countQuery += ` AND a.created_at >= $${cp}::timestamptz`;
+      countParams.push(new Date(dateFrom).toISOString());
+    }
     if (dateTo) {
       cp++;
-      countQuery += ` AND a.created_at <= $${cp}`;
       const end = new Date(dateTo);
       end.setHours(23, 59, 59, 999);
-      countParams.push(end);
+      countQuery += ` AND a.created_at <= $${cp}::timestamptz`;
+      countParams.push(end.toISOString());
     }
 
     const countResult = await pool.query(countQuery, countParams);
@@ -77,7 +83,7 @@ router.get('/audit-logs', authenticateToken, authorizeRoles('admin'), async (req
   }
 });
 
-// Get list of users for filter dropdown (Admin only)
+// Get list of users who appear in audit logs (for filter dropdown)
 router.get('/audit-users', authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const pool = req.app.get('db');
   try {
