@@ -173,13 +173,16 @@ Field type rules:
 - Photo/image capture areas → "photo"
 - Tables with repeating rows (checklists, item lists, inspection rows) → "table" with columns array
 
-For "table" type, columns array uses prefixes:
+For "table" type, columns array uses prefixes with optional group headers:
 - Short text entry → "text:Column Name"
 - Checkbox/tick columns → "check:Column Name"
 - Date columns → "date:Column Name"
+- Grouped columns → "Group Name > type:Column Name"
 
-Example for an equipment checklist table:
-["text:Item No.", "text:Description", "check:OK", "check:BAD", "check:Repair", "check:Add", "check:Replace", "text:Assigned To", "date:Planned Date", "date:Completion Date"]
+Example for an equipment checklist table with grouped headers:
+["text:Item No.", "text:Description", "CONDITION > check:OK", "CONDITION > check:BAD", "ACTION > check:Repair", "ACTION > check:Add", "ACTION > check:Replace", "text:Assigned To", "date:Planned Date", "date:Completion Date"]
+
+Use groups whenever the PDF has merged/spanning header cells that group multiple columns together.
 
 Category must be exactly one of: "QA/QC", "QHSE", "Equipment Installation", "Maintenance"
 
