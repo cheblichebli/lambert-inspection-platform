@@ -96,12 +96,41 @@ const InspectionDetail = ({ user }) => {
     if (!rows || !Array.isArray(rows) || rows.length === 0) return null;
     const columns = field.columns || [];
     if (columns.length === 0) return null;
-    const getColType = (col) => col.startsWith('check:') ? 'check' : col.startsWith('date:') ? 'date' : 'text';
-    const getColLabel = (col) => col.replace(/^(text:|check:|date:)/, '');
+    const getColGroup = (col) => col.includes(' > ') ? col.split(' > ')[0].trim() : null;
+    const getColCore = (col) => col.includes(' > ') ? col.split(' > ')[1].trim() : col;
+    const getColType = (col) => { const c = getColCore(col); return c.startsWith('check:') ? 'check' : c.startsWith('date:') ? 'date' : 'text'; };
+    const getColLabel = (col) => getColCore(col).replace(/^(text:|check:|date:)/, '');
+
+    const hasGroups = columns.some(col => getColGroup(col) !== null);
+    const groupHeaders = [];
+    if (hasGroups) {
+      let gi = 0;
+      while (gi < columns.length) {
+        const grp = getColGroup(columns[gi]);
+        let span = 1;
+        while (gi + span < columns.length && getColGroup(columns[gi + span]) === grp) span++;
+        groupHeaders.push({ label: grp || '', span });
+        gi += span;
+      }
+    }
+
     return (
       <div style={{ overflowX: 'auto', marginTop: '8px' }}>
         <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.875rem', minWidth: '400px' }}>
           <thead>
+            {hasGroups && (
+              <tr>
+                {groupHeaders.map((gh, ghi) => (
+                  <th key={ghi} colSpan={gh.span} style={{
+                    border: '1px solid #e2e8f0', padding: '6px 12px',
+                    background: '#e2e8f0', color: '#1e293b', fontWeight: 700,
+                    textAlign: 'center', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em'
+                  }}>
+                    {gh.label}
+                  </th>
+                ))}
+              </tr>
+            )}
             <tr>
               {columns.map((col, ci) => (
                 <th key={ci} style={{
