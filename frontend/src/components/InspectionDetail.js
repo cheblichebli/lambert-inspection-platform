@@ -260,7 +260,7 @@ const generateInspectionPDF = (inspection, formData, templateFields, gpsAddress)
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:16px;border-bottom:3px solid #4a9d5f;margin-bottom:20px;">
     <div style="display:flex;align-items:center;gap:14px;">
-      <div style="width:52px;height:52px;background:#4a9d5f;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-size:22px;font-weight:900;letter-spacing:-1px;flex-shrink:0;">L</div>
+      ${logoHTML}
       <div>
         <p style="font-size:18px;font-weight:800;color:#1e293b;line-height:1;">LAMBERT ELECTROMEC</p>
         <p style="font-size:10px;color:#64748b;margin-top:2px;letter-spacing:0.04em;">INSPECTION MANAGEMENT PLATFORM</p>
