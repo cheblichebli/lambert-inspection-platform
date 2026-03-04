@@ -158,7 +158,8 @@ Return ONLY a valid JSON object with this exact structure, no markdown, no expla
       "required": false,
       "placeholder": "",
       "options": [],
-      "columns": []
+      "columns": [],
+      "note_content": "" 
     }
   ]
 }
@@ -172,6 +173,8 @@ Field type rules:
 - Date fields → "date"
 - Photo/image capture areas → "photo"
 - Tables with repeating rows (checklists, item lists, inspection rows) → "table" with columns array
+- NOTE / disclaimer / instruction text blocks (non-editable callout text) → "note" with the note text in the placeholder field
+- Signature / sign-off / approval sections with Name, Role, Signature, Date columns → "signatories" with the roles listed in the options array
 
 For "table" type, columns array uses prefixes with optional group headers:
 - Short text entry → "text:Column Name"
