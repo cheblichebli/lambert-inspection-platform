@@ -3,7 +3,7 @@ const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
-// ─── Audit helper — matches users.js signature exactly ───────────────────────
+// ─── Audit helper ─────────────────────────────────────────────────────────────
 async function logAudit(pool, userId, action, entityType, entityId, details, req) {
   try {
     let userEmail = null;
@@ -11,8 +11,7 @@ async function logAudit(pool, userId, action, entityType, entityId, details, req
 
     if (userId) {
       const userResult = await pool.query(
-        'SELECT email, full_name FROM users WHERE id = $1',
-        [userId]
+        'SELECT email, full_name FROM users WHERE id = $1', [userId]
       );
       if (userResult.rows.length > 0) {
         userEmail = userResult.rows[0].email;
@@ -25,12 +24,7 @@ async function logAudit(pool, userId, action, entityType, entityId, details, req
        (user_id, user_email, user_name, action, entity_type, entity_id, details, ip_address, user_agent)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
-        userId,
-        userEmail,
-        userName,
-        action,
-        entityType,
-        entityId,
+        userId, userEmail, userName, action, entityType, entityId,
         details ? JSON.stringify(details) : null,
         req.ip || req.connection?.remoteAddress || 'unknown',
         req.headers['user-agent'] || 'unknown'
@@ -152,7 +146,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const inspectionResult = await client.query(
       `INSERT INTO inspections 
-       (template_id, inspector_id, status, form_data, location, equipment_id, notes, sync_id,
+       (template_id, inspector_id, status, data, location, equipment_id, notes, sync_id,
         submitted_at, offline_created, gps_latitude, gps_longitude, gps_accuracy, gps_timestamp,
         inspector_signature, signature_timestamp, scanned_codes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
@@ -186,32 +180,28 @@ router.post('/', authenticateToken, async (req, res) => {
 
     await client.query('COMMIT');
 
-    // ── Audit logs ──────────────────────────────────────────────────────────
+    // ── Audit logs ────────────────────────────────────────────────────────
     const tmpl = await pool.query(
       'SELECT title FROM form_templates WHERE id = $1', [templateId]
     );
     const templateTitle = tmpl.rows[0]?.title || `Template #${templateId}`;
 
     if (status === 'submitted') {
-      await logAudit(pool, req.user.id, 'inspections.submitted', 'inspection', inspection.id, {
-        templateTitle, location, equipmentId
-      }, req);
+      await logAudit(pool, req.user.id, 'inspections.submitted', 'inspection', inspection.id,
+        { templateTitle, location, equipmentId }, req);
     } else {
-      await logAudit(pool, req.user.id, 'inspections.created', 'inspection', inspection.id, {
-        templateTitle, location, equipmentId, status
-      }, req);
+      await logAudit(pool, req.user.id, 'inspections.created', 'inspection', inspection.id,
+        { templateTitle, location, equipmentId, status }, req);
     }
 
     if (inspectorSignature) {
-      await logAudit(pool, req.user.id, 'inspections.signed', 'inspection', inspection.id, {
-        templateTitle, signatureType: 'inspector'
-      }, req);
+      await logAudit(pool, req.user.id, 'inspections.signed', 'inspection', inspection.id,
+        { templateTitle, signatureType: 'inspector' }, req);
     }
 
     if (photos && photos.length > 0) {
-      await logAudit(pool, req.user.id, 'inspections.photos_uploaded', 'inspection', inspection.id, {
-        templateTitle, photoCount: photos.length
-      }, req);
+      await logAudit(pool, req.user.id, 'inspections.photos_uploaded', 'inspection', inspection.id,
+        { templateTitle, photoCount: photos.length }, req);
     }
 
     res.status(201).json(inspection);
@@ -236,8 +226,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
   try {
     const checkResult = await pool.query(
-      'SELECT inspector_id, status, template_id FROM inspections WHERE id = $1',
-      [id]
+      'SELECT inspector_id, status, template_id FROM inspections WHERE id = $1', [id]
     );
 
     if (checkResult.rows.length === 0) {
@@ -253,7 +242,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
     const result = await pool.query(
       `UPDATE inspections
-       SET form_data = $1, location = $2, equipment_id = $3, notes = $4,
+       SET data = $1, location = $2, equipment_id = $3, notes = $4,
            status = $5, updated_at = CURRENT_TIMESTAMP,
            submitted_at = CASE WHEN $5 = 'submitted' THEN CURRENT_TIMESTAMP ELSE submitted_at END,
            gps_latitude = COALESCE($7, gps_latitude),
@@ -274,7 +263,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       ]
     );
 
-    // ── Audit logs ──────────────────────────────────────────────────────────
+    // ── Audit logs ────────────────────────────────────────────────────────
     const tmpl = await pool.query(
       'SELECT title FROM form_templates WHERE id = $1', [existing.template_id]
     );
@@ -282,19 +271,16 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const newStatus = status || existing.status;
 
     if (newStatus === 'submitted' && existing.status !== 'submitted') {
-      await logAudit(pool, req.user.id, 'inspections.submitted', 'inspection', id, {
-        templateTitle, location, equipmentId
-      }, req);
+      await logAudit(pool, req.user.id, 'inspections.submitted', 'inspection', id,
+        { templateTitle, location, equipmentId }, req);
     } else {
-      await logAudit(pool, req.user.id, 'inspections.updated', 'inspection', id, {
-        templateTitle, location
-      }, req);
+      await logAudit(pool, req.user.id, 'inspections.updated', 'inspection', id,
+        { templateTitle, location }, req);
     }
 
     if (inspectorSignature) {
-      await logAudit(pool, req.user.id, 'inspections.signed', 'inspection', id, {
-        templateTitle, signatureType: 'inspector'
-      }, req);
+      await logAudit(pool, req.user.id, 'inspections.signed', 'inspection', id,
+        { templateTitle, signatureType: 'inspector' }, req);
     }
 
     res.json(result.rows[0]);
@@ -360,8 +346,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       `SELECT i.equipment_id, i.location, ft.title as template_title
        FROM inspections i
        LEFT JOIN form_templates ft ON i.template_id = ft.id
-       WHERE i.id = $1`,
-      [id]
+       WHERE i.id = $1`, [id]
     );
 
     let query = 'DELETE FROM inspections WHERE id = $1';
