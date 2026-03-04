@@ -1,5 +1,5 @@
 const express = require('express');
-const axios = require('axios');
+const https = require('https');
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 const router = express.Router();
 
@@ -186,40 +186,61 @@ Category must be exactly one of: "QA/QC", "QHSE", "Equipment Installation", "Mai
 Return only the raw JSON. No markdown. No explanation.`;
 
   try {
-    const anthropicResponse = await axios.post(
-      'https://api.anthropic.com/v1/messages',
-      {
-        model: 'claude-opus-4-6',
-        max_tokens: 2000,
-        system: systemPrompt,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: {
-                type: 'base64',
-                media_type: 'application/pdf',
-                data: pdfBase64
-              }
-            },
-            {
-              type: 'text',
-              text: 'Convert this PDF form to a digital form definition. Return only the JSON object.'
+    const requestBody = JSON.stringify({
+      model: 'claude-opus-4-6',
+      max_tokens: 2000,
+      system: systemPrompt,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: pdfBase64
             }
-          ]
-        }]
-      },
-      {
+          },
+          {
+            type: 'text',
+            text: 'Convert this PDF form to a digital form definition. Return only the JSON object.'
+          }
+        ]
+      }]
+    });
+
+    const data = await new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: 'api.anthropic.com',
+        path: '/v1/messages',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(requestBody),
           'x-api-key': ANTHROPIC_API_KEY,
           'anthropic-version': '2023-06-01'
         }
-      }
-    );
+      }, (res) => {
+        let body = '';
+        res.on('data', chunk => body += chunk);
+        res.on('end', () => {
+          try {
+            const parsed = JSON.parse(body);
+            if (res.statusCode >= 400) {
+              reject(new Error('Anthropic API error ' + res.statusCode + ': ' + JSON.stringify(parsed)));
+            } else {
+              resolve(parsed);
+            }
+          } catch (e) {
+            reject(new Error('Failed to parse Anthropic response'));
+          }
+        });
+      });
+      req.on('error', reject);
+      req.write(requestBody);
+      req.end();
+    });
 
-    const data = anthropicResponse.data;
     const text = (data.content || []).find(b => b.type === 'text')?.text || '';
 
     // Strip any accidental markdown fences
@@ -241,7 +262,7 @@ Return only the raw JSON. No markdown. No explanation.`;
 
   } catch (error) {
     console.error('PDF conversion error:', error.response?.data || error.message);
-    const msg = error.response?.data?.error?.message || error.response?.data?.error || error.message;
+    const msg = error.message || 'Unknown error';
     res.status(500).json({ error: 'Failed to convert PDF: ' + msg });
   }
 });
