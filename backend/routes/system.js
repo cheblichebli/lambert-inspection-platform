@@ -159,7 +159,7 @@ Return ONLY a valid JSON object with this exact structure, no markdown, no expla
       "placeholder": "",
       "options": [],
       "columns": [],
-      "note_content": "" 
+      "defaultRows": []
     }
   ]
 }
@@ -172,7 +172,7 @@ Field type rules:
 - Multiple choice pick-one → "radio" with options array filled
 - Date fields → "date"
 - Photo/image capture areas → "photo"
-- Tables with repeating rows (checklists, item lists, inspection rows) → "table" with columns array
+- Tables with repeating rows (checklists, item lists, inspection rows) → "table" with columns array AND defaultRows array
 - NOTE / disclaimer / instruction text blocks (non-editable callout text) → "note" with the note text in the placeholder field
 - Signature / sign-off / approval sections with Name, Role, Signature, Date columns → "signatories" with the roles listed in the options array
 
@@ -187,6 +187,36 @@ Example for an equipment checklist table with grouped headers:
 
 Use groups whenever the PDF has merged/spanning header cells that group multiple columns together.
 
+⚠️  MANDATORY RULE FOR TABLE defaultRows — THIS IS CRITICAL:
+If a table in the PDF has pre-printed text in any column (e.g. a Description, Item, Criteria,
+or Check Item column that already contains inspection checklist text), you MUST extract every
+pre-printed row into the "defaultRows" array. This is not optional.
+
+defaultRows format: each element is a plain object whose keys are the bare column names
+(strip the type prefix and group prefix from the column definition).
+Examples:
+  column "text:S/N"                              → key is "S/N"
+  column "text:Description"                      → key is "Description"
+  column "For Use of QC Engineer Only > check:App." → key is "App."
+  column "For Use of QC Engineer Only > text:Remarks" → key is "Remarks"
+
+For a QA/QC checklist with 11 pre-printed rows the defaultRows should look like:
+"defaultRows": [
+  { "S/N": "1",  "Description": "Approved and Authorized Drawings available on site" },
+  { "S/N": "2",  "Description": "Sleeves, Cut out Boxes, Piping of required specifications" },
+  { "S/N": "3",  "Description": "Paddle Flangs of required Specifications" },
+  ...and so on for every row printed in the source document...
+  { "S/N": "11", "Description": "" }
+]
+
+Rules for defaultRows:
+1. Include ALL pre-printed rows — use the S/N numbers to establish correct order.
+2. Include blank/spare rows as { "S/N": "11", "Description": "" }.
+3. Only include keys for columns that have pre-printed content (typically S/N + Description).
+4. Leave checkbox/tick columns (App., N.App., NA, OK, BAD etc.) OUT of defaultRows entirely — the inspector fills those.
+5. If a table has NO pre-printed row content at all, set defaultRows to [].
+6. Every table field MUST have a "defaultRows" key — never omit it.
+
 Category must be exactly one of: "QA/QC", "QHSE", "Equipment Installation", "Maintenance"
 
 Return only the raw JSON. No markdown. No explanation.`;
@@ -194,7 +224,7 @@ Return only the raw JSON. No markdown. No explanation.`;
   try {
     const requestBody = JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2000,
+      max_tokens: 4000,
       system: systemPrompt,
       messages: [{
         role: 'user',
@@ -253,7 +283,7 @@ Return only the raw JSON. No markdown. No explanation.`;
     const clean = text.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
 
-    // Normalize fields — ensure all required keys exist
+    // Normalize fields — ensure all required keys exist, preserve defaultRows
     parsed.fields = (parsed.fields || []).map((f, i) => ({
       id: `field_${Date.now()}_${i}`,
       type: f.type || 'text',
@@ -261,7 +291,8 @@ Return only the raw JSON. No markdown. No explanation.`;
       required: f.required || false,
       placeholder: f.placeholder || '',
       options: f.options || [],
-      columns: f.columns || []
+      columns: f.columns || [],
+      defaultRows: f.defaultRows || []   // ← preserved so pre-populated table rows reach the frontend
     }));
 
     res.json(parsed);
