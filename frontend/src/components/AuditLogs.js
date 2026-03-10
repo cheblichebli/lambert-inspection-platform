@@ -296,12 +296,12 @@ const AuditLogs = () => {
           <div className="audit-logs-table">
             <table style={{ tableLayout: 'fixed', width: '100%' }}>
               <colgroup>
-                <col style={{ width: '210px' }} />
-                <col style={{ width: '220px' }} />
-                <col style={{ width: '90px' }} />
-                <col style={{ width: '190px' }} />
-                <col style={{ width: 'auto' }} />
-                <col style={{ width: '115px' }} />
+                <col style={{ width: '16%' }} />  {/* Date & Time */}
+                <col style={{ width: '18%' }} />  {/* User */}
+                <col style={{ width: '8%'  }} />  {/* Role */}
+                <col style={{ width: '16%' }} />  {/* Action */}
+                <col style={{ width: '30%' }} />  {/* Details */}
+                <col style={{ width: '12%' }} />  {/* IP Address */}
               </colgroup>
               <thead>
                 <tr>
@@ -323,10 +323,12 @@ const AuditLogs = () => {
                 ) : (
                   logs.map(log => (
                     <tr key={log.id}>
-                      <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', paddingRight: '12px' }}>{formatDate(log.created_at)}</td>
-                      <td>
-                        <div style={{ fontWeight: 500 }}>{log.user_name || 'Unknown'}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b' }}>{log.user_email || 'N/A'}</div>
+                      <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: '8px' }}>
+                        {formatDate(log.created_at)}
+                      </td>
+                      <td style={{ overflow: 'hidden' }}>
+                        <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.user_name || 'Unknown'}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.user_email || 'N/A'}</div>
                       </td>
                       <td>
                         <span style={{
