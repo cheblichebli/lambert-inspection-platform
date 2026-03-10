@@ -69,8 +69,17 @@ const AuditLogs = () => {
 
   const loadAuditUsers = async () => {
     try {
-      const data = await systemAPI.getAuditUsers();
-      setAuditUsers(data);
+      // Try dedicated audit users endpoint first, fall back to regular users list
+      const data = systemAPI.getAuditUsers
+        ? await systemAPI.getAuditUsers()
+        : await import('../api').then(m => m.usersAPI.getAll());
+      // Normalize shape: audit users have user_id/user_name/user_email; regular users have id/full_name/email
+      const normalized = data.map(u => ({
+        user_id:    u.user_id    ?? u.id,
+        user_name:  u.user_name  ?? u.full_name,
+        user_email: u.user_email ?? u.email,
+      }));
+      setAuditUsers(normalized);
     } catch (err) {
       console.error('Failed to load audit users', err);
     }
@@ -307,7 +316,7 @@ const AuditLogs = () => {
                 ) : (
                   logs.map(log => (
                     <tr key={log.id}>
-                      <td style={{ whiteSpace: 'nowrap' }}>{formatDate(log.created_at)}</td>
+                      <td style={{ whiteSpace: 'nowrap', minWidth: '190px', paddingRight: '16px' }}>{formatDate(log.created_at)}</td>
                       <td>
                         <div style={{ fontWeight: 500 }}>{log.user_name || 'Unknown'}</div>
                         <div style={{ fontSize: '12px', color: '#64748b' }}>{log.user_email || 'N/A'}</div>
