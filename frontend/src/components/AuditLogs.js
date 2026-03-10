@@ -296,11 +296,11 @@ const AuditLogs = () => {
           <div className="audit-logs-table">
             <table style={{ tableLayout: 'fixed', width: '100%' }}>
               <colgroup>
-                <col style={{ width: '16%' }} />  {/* Date & Time */}
-                <col style={{ width: '18%' }} />  {/* User */}
-                <col style={{ width: '8%'  }} />  {/* Role */}
-                <col style={{ width: '16%' }} />  {/* Action */}
-                <col style={{ width: '30%' }} />  {/* Details */}
+                <col style={{ width: '18%' }} />  {/* Date & Time */}
+                <col style={{ width: '20%' }} />  {/* User */}
+                <col style={{ width: '7%'  }} />  {/* Role */}
+                <col style={{ width: '17%' }} />  {/* Action */}
+                <col style={{ width: '26%' }} />  {/* Details */}
                 <col style={{ width: '12%' }} />  {/* IP Address */}
               </colgroup>
               <thead>
@@ -323,12 +323,12 @@ const AuditLogs = () => {
                 ) : (
                   logs.map(log => (
                     <tr key={log.id}>
-                      <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', paddingRight: '8px' }}>
+                      <td style={{ whiteSpace: 'nowrap', paddingRight: '8px' }}>
                         {formatDate(log.created_at)}
                       </td>
-                      <td style={{ overflow: 'hidden' }}>
-                        <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.user_name || 'Unknown'}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.user_email || 'N/A'}</div>
+                      <td>
+                        <div style={{ fontWeight: 500 }}>{log.user_name || 'Unknown'}</div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>{log.user_email || 'N/A'}</div>
                       </td>
                       <td>
                         <span style={{
