@@ -360,10 +360,24 @@ const InspectionForm = ({ user }) => {
           }
         }
 
-        var rows = formData[field.id] || [{}];
+        // Seed rows from defaultRows if no data entered yet
+        var defaultRows = field.defaultRows || [];
+        var emptyRow = {};
+        var seedRows = defaultRows.length > 0
+          ? defaultRows.map(function(dr) {
+              var r = {};
+              columns.forEach(function(col, ci) {
+                var label = getColLabel(col);
+                // Pre-fill from defaultRows by label name; leave checkbox/date cols empty
+                r[ci] = dr[label] !== undefined ? dr[label] : (getColType(col) === 'check' ? false : '');
+              });
+              return r;
+            })
+          : [{}];
+        var rows = formData[field.id] || seedRows;
 
         var updateCell = function(rowIdx, colIdx, val) {
-          var current = formData[field.id] || [{}];
+          var current = formData[field.id] || seedRows;
           var newRows = current.map(function(r) { return Object.assign({}, r); });
           if (!newRows[rowIdx]) newRows[rowIdx] = {};
           newRows[rowIdx][colIdx] = val;
@@ -371,12 +385,12 @@ const InspectionForm = ({ user }) => {
         };
 
         var addRow = function() {
-          var current = formData[field.id] || [{}];
+          var current = formData[field.id] || seedRows;
           handleFieldChange(field.id, [...current, {}]);
         };
 
         var removeRow = function(rowIdx) {
-          var current = formData[field.id] || [{}];
+          var current = formData[field.id] || seedRows;
           if (current.length <= 1) return;
           handleFieldChange(field.id, current.filter(function(_, i) { return i !== rowIdx; }));
         };
@@ -449,8 +463,15 @@ const InspectionForm = ({ user }) => {
                               <input
                                 type="text"
                                 value={cellVal || ''}
+                                readOnly={defaultRows.length > 0 && (getColLabel(col) === 'S/N' || getColLabel(col) === 'Description')}
                                 onChange={function(e) { updateCell(ri, ci, e.target.value); }}
-                                style={{ border: 'none', background: 'transparent', width: '100%', minWidth: '60px', fontSize: '0.875rem', padding: '2px 4px' }}
+                                style={{
+                                  border: 'none',
+                                  background: defaultRows.length > 0 && (getColLabel(col) === 'S/N' || getColLabel(col) === 'Description') ? '#f8fafc' : 'transparent',
+                                  width: '100%', minWidth: '60px', fontSize: '0.875rem', padding: '2px 4px',
+                                  color: '#1e293b',
+                                  fontWeight: defaultRows.length > 0 && getColLabel(col) === 'Description' ? '500' : 'normal'
+                                }}
                               />
                             )}
                           </td>
