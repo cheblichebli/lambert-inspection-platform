@@ -24,8 +24,17 @@ function App() {
     setUser(currentUser);
     setLoading(false);
 
+    // Only download offline data if cache is stale (older than 5 minutes)
+    // Prevents a multi-MB sync request on every single page load/refresh
     if (currentUser && navigator.onLine) {
-      syncAPI.downloadOfflineData().catch(console.error);
+      const lastSync = localStorage.getItem('lastOfflineSync');
+      const FIVE_MIN = 5 * 60 * 1000;
+      const isStale = !lastSync || (Date.now() - parseInt(lastSync)) > FIVE_MIN;
+      if (isStale) {
+        syncAPI.downloadOfflineData()
+          .then(() => localStorage.setItem('lastOfflineSync', Date.now().toString()))
+          .catch(console.error);
+      }
     }
 
     const handleOnline = () => {
@@ -33,6 +42,7 @@ function App() {
       if (currentUser) {
         syncAPI.syncInspections()
           .then(() => syncAPI.downloadOfflineData())
+          .then(() => localStorage.setItem('lastOfflineSync', Date.now().toString()))
           .catch(console.error);
       }
     };
@@ -50,6 +60,7 @@ function App() {
 
   const handleLogout = () => {
     authAPI.logout();
+    localStorage.removeItem('lastOfflineSync');
     setUser(null);
   };
 
