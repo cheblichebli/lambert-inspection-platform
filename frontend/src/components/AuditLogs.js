@@ -69,15 +69,14 @@ const AuditLogs = () => {
 
   const loadAuditUsers = async () => {
     try {
-      // Try dedicated audit users endpoint first, fall back to regular users list
-      const data = systemAPI.getAuditUsers
-        ? await systemAPI.getAuditUsers()
-        : await import('../api').then(m => m.usersAPI.getAll());
-      // Normalize shape: audit users have user_id/user_name/user_email; regular users have id/full_name/email
+      // Always load ALL users (not just those with audit entries)
+      // so new users appear in the filter dropdown immediately
+      const { usersAPI } = await import('../api');
+      const data = await usersAPI.getAll();
       const normalized = data.map(u => ({
-        user_id:    u.user_id    ?? u.id,
-        user_name:  u.user_name  ?? u.full_name,
-        user_email: u.user_email ?? u.email,
+        user_id:    u.id,
+        user_name:  u.full_name,
+        user_email: u.email,
       }));
       setAuditUsers(normalized);
     } catch (err) {
@@ -191,7 +190,7 @@ const AuditLogs = () => {
     fontSize: '0.875rem',
     background: 'white',
     cursor: 'pointer',
-    minWidth: '160px'
+    minWidth: '200px'
   };
 
   const inputStyle = {
@@ -295,7 +294,15 @@ const AuditLogs = () => {
       ) : (
         <>
           <div className="audit-logs-table">
-            <table>
+            <table style={{ tableLayout: 'fixed', width: '100%' }}>
+              <colgroup>
+                <col style={{ width: '210px' }} />
+                <col style={{ width: '220px' }} />
+                <col style={{ width: '90px' }} />
+                <col style={{ width: '190px' }} />
+                <col style={{ width: 'auto' }} />
+                <col style={{ width: '115px' }} />
+              </colgroup>
               <thead>
                 <tr>
                   <th><Calendar size={14} /> Date & Time</th>
@@ -316,7 +323,7 @@ const AuditLogs = () => {
                 ) : (
                   logs.map(log => (
                     <tr key={log.id}>
-                      <td style={{ whiteSpace: 'nowrap', minWidth: '190px', paddingRight: '16px' }}>{formatDate(log.created_at)}</td>
+                      <td style={{ whiteSpace: 'nowrap', overflow: 'hidden', paddingRight: '12px' }}>{formatDate(log.created_at)}</td>
                       <td>
                         <div style={{ fontWeight: 500 }}>{log.user_name || 'Unknown'}</div>
                         <div style={{ fontSize: '12px', color: '#64748b' }}>{log.user_email || 'N/A'}</div>
