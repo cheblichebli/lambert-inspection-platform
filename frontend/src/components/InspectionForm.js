@@ -425,7 +425,8 @@ const InspectionForm = ({ user }) => {
                         color: '#374151',
                         fontWeight: 600,
                         whiteSpace: 'nowrap',
-                        textAlign: getColType(col) === 'check' ? 'center' : 'left'
+                        textAlign: getColType(col) === 'check' ? 'center' : 'left',
+                        width: getColLabel(col) === 'S/N' ? '48px' : getColType(col) === 'check' ? '60px' : 'auto'
                       }}>
                         {getColLabel(col)}
                       </th>
