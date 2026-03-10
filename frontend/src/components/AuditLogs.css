@@ -21,7 +21,8 @@
   background: white;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  overflow-x: auto;
+  width: 100%;
 }
 
 .audit-logs-table table {
@@ -65,14 +66,4 @@
 .pagination button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-@media (max-width: 768px) {
-  .audit-logs-table {
-    overflow-x: auto;
-  }
-  
-  .audit-logs-table table {
-    min-width: 800px;
-  }
 }
