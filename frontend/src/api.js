@@ -279,13 +279,13 @@ export const systemAPI = {
     return response.data;
   },
 
-  getStats: async () => {
-    const response = await api.get('/system/stats');
+  getAuditUsers: async () => {
+    const response = await api.get('/system/audit-users');
     return response.data;
   },
 
-  convertPdfForm: async (pdfBase64) => {
-    const response = await api.post('/system/convert-pdf-form', { pdfBase64 });
+  getStats: async () => {
+    const response = await api.get('/system/stats');
     return response.data;
   },
 };
