@@ -61,6 +61,7 @@ const Login = ({ onLogin }) => {
               placeholder="your.email@lambertelectromec.com"
               required
               disabled={loading || !isOnline}
+              style={{ width: '100%', boxSizing: 'border-box' }}
             />
           </div>
 
@@ -74,6 +75,7 @@ const Login = ({ onLogin }) => {
               placeholder="Enter your password"
               required
               disabled={loading || !isOnline}
+              style={{ width: '100%', boxSizing: 'border-box' }}
             />
           </div>
 
@@ -125,11 +127,7 @@ const Login = ({ onLogin }) => {
           </button>
         </form>
 
-        <div className="login-footer">
-          <p className="text-muted">
-            Default credentials: admin@lambertelectromec.com / Admin@123
-          </p>
-        </div>
+      
       </div>
     </div>
   );
