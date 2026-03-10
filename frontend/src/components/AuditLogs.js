@@ -124,8 +124,8 @@ const AuditLogs = () => {
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleString('en-US', {
-      year: 'numeric', month: 'short', day: 'numeric',
-      hour: '2-digit', minute: '2-digit', second: '2-digit'
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
     });
   };
 
@@ -294,23 +294,15 @@ const AuditLogs = () => {
       ) : (
         <>
           <div className="audit-logs-table">
-            <table style={{ tableLayout: 'fixed', width: '100%' }}>
-              <colgroup>
-                <col style={{ width: '18%' }} />  {/* Date & Time */}
-                <col style={{ width: '20%' }} />  {/* User */}
-                <col style={{ width: '7%'  }} />  {/* Role */}
-                <col style={{ width: '17%' }} />  {/* Action */}
-                <col style={{ width: '26%' }} />  {/* Details */}
-                <col style={{ width: '12%' }} />  {/* IP Address */}
-              </colgroup>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th><Calendar size={14} /> Date & Time</th>
-                  <th><User size={14} /> User</th>
-                  <th>Role</th>
-                  <th><Activity size={14} /> Action</th>
+                  <th style={{ minWidth: '160px' }}><Calendar size={14} /> Date & Time</th>
+                  <th style={{ minWidth: '180px' }}><User size={14} /> User</th>
+                  <th style={{ minWidth: '70px' }}>Role</th>
+                  <th style={{ minWidth: '160px' }}><Activity size={14} /> Action</th>
                   <th><Shield size={14} /> Details</th>
-                  <th>IP Address</th>
+                  <th style={{ minWidth: '100px' }}>IP Address</th>
                 </tr>
               </thead>
               <tbody>
@@ -323,7 +315,7 @@ const AuditLogs = () => {
                 ) : (
                   logs.map(log => (
                     <tr key={log.id}>
-                      <td style={{ whiteSpace: 'nowrap', paddingRight: '8px' }}>
+                      <td style={{ paddingRight: '8px', fontSize: '0.85rem' }}>
                         {formatDate(log.created_at)}
                       </td>
                       <td>
