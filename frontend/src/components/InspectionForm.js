@@ -424,15 +424,20 @@ const InspectionForm = ({ user }) => {
           handleFieldChange(field.id, current.filter(function(_, i) { return i !== rowIdx; }));
         };
 
-        // Column width strategy for mobile:
-        // S/N (ci=0, text): fixed narrow — 36px
-        // check columns: fixed 46px each
-        // text columns other than S/N: share remaining space equally (auto)
-        // delete button: 30px
+        // Column width strategy for mobile-first layout:
+        // ci=0 (S/N):        36px fixed
+        // check columns:     46px fixed each
+        // ci=1 (Description): takes ALL remaining space (no explicit width with tableLayout:fixed)
+        // other text cols (Remarks etc): capped at 80px so Description stays wide
+        // delete button:     30px fixed
+        var textColCount = 0;
+        columns.forEach(function(c) { if (getColType(c) === 'text') textColCount++; });
         var getColWidth = function(col, ci) {
           if (getColType(col) === 'check') return '46px';
-          if (ci === 0) return '36px';  // S/N column
-          return undefined; // description / remarks — absorb remaining space
+          if (ci === 0) return '36px';                    // S/N
+          if (ci === 1) return undefined;                  // Description — absorbs remaining space
+          if (getColType(col) === 'text') return '80px';  // Remarks / other text — capped narrow
+          return undefined;
         };
 
         return (
@@ -467,7 +472,7 @@ const InspectionForm = ({ user }) => {
                         fontSize: '0.7rem',
                         width: getColWidth(col, ci),
                         textAlign: getColType(col) === 'check' ? 'center' : 'left',
-                        whiteSpace: getColType(col) === 'check' ? 'normal' : 'nowrap',
+                        whiteSpace: 'normal',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis'
                       }}>
@@ -510,15 +515,29 @@ const InspectionForm = ({ user }) => {
                                 style={{ border: 'none', background: 'transparent', fontSize: '0.75rem', width: '100%', minWidth: 0 }}
                               />
                             )}
-                            {colType === 'text' && (
+                            {colType === 'text' && isReadOnly && (
+                              <span style={{
+                                display: 'block',
+                                width: '100%',
+                                fontSize: ci === 0 ? '0.75rem' : '0.8rem',
+                                padding: '1px 2px',
+                                color: '#1e293b',
+                                fontWeight: getColLabel(col) === 'Description' ? '500' : 'normal',
+                                wordBreak: 'break-word',
+                                whiteSpace: 'normal',
+                                lineHeight: 1.3
+                              }}>
+                                {cellVal !== undefined ? cellVal : ''}
+                              </span>
+                            )}
+                            {colType === 'text' && !isReadOnly && (
                               <input
                                 type="text"
                                 value={cellVal !== undefined ? cellVal : ''}
-                                readOnly={isReadOnly}
                                 onChange={function(e) { updateCell(ri, ci, e.target.value); }}
                                 style={{
                                   border: 'none',
-                                  background: isReadOnly ? '#f8fafc' : 'transparent',
+                                  background: 'transparent',
                                   width: '100%',
                                   minWidth: 0,
                                   fontSize: ci === 0 ? '0.75rem' : '0.8rem',
