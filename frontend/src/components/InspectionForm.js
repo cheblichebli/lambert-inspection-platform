@@ -360,24 +360,10 @@ const InspectionForm = ({ user }) => {
           }
         }
 
-        // Seed rows from defaultRows if no data entered yet
-        var defaultRows = field.defaultRows || [];
-        var emptyRow = {};
-        var seedRows = defaultRows.length > 0
-          ? defaultRows.map(function(dr) {
-              var r = {};
-              columns.forEach(function(col, ci) {
-                var label = getColLabel(col);
-                // Pre-fill from defaultRows by label name; leave checkbox/date cols empty
-                r[ci] = dr[label] !== undefined ? dr[label] : (getColType(col) === 'check' ? false : '');
-              });
-              return r;
-            })
-          : [{}];
-        var rows = formData[field.id] || seedRows;
+        var rows = formData[field.id] || [{}];
 
         var updateCell = function(rowIdx, colIdx, val) {
-          var current = formData[field.id] || seedRows;
+          var current = formData[field.id] || [{}];
           var newRows = current.map(function(r) { return Object.assign({}, r); });
           if (!newRows[rowIdx]) newRows[rowIdx] = {};
           newRows[rowIdx][colIdx] = val;
@@ -385,19 +371,19 @@ const InspectionForm = ({ user }) => {
         };
 
         var addRow = function() {
-          var current = formData[field.id] || seedRows;
+          var current = formData[field.id] || [{}];
           handleFieldChange(field.id, [...current, {}]);
         };
 
         var removeRow = function(rowIdx) {
-          var current = formData[field.id] || seedRows;
+          var current = formData[field.id] || [{}];
           if (current.length <= 1) return;
           handleFieldChange(field.id, current.filter(function(_, i) { return i !== rowIdx; }));
         };
 
         return (
           <div style={{ overflowX: 'auto', marginTop: '8px' }}>
-            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.875rem', minWidth: '500px' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.875rem', tableLayout: 'fixed' }}>
               <thead>
                 {hasGroups && (
                   <tr>
@@ -420,13 +406,13 @@ const InspectionForm = ({ user }) => {
                     return (
                       <th key={ci} style={{
                         border: '1px solid #e2e8f0',
-                        padding: '8px 10px',
+                        padding: '6px 8px',
                         background: '#f1f5f9',
                         color: '#374151',
                         fontWeight: 600,
-                        whiteSpace: 'nowrap',
-                        textAlign: getColType(col) === 'check' ? 'center' : 'left',
-                        width: getColLabel(col) === 'S/N' ? '48px' : getColType(col) === 'check' ? '60px' : 'auto'
+                        fontSize: '0.75rem',
+                        width: getColType(col) === 'check' ? '52px' : 'auto',
+                        textAlign: getColType(col) === 'check' ? 'center' : 'left'
                       }}>
                         {getColLabel(col)}
                       </th>
@@ -443,13 +429,13 @@ const InspectionForm = ({ user }) => {
                         var colType = getColType(col);
                         var cellVal = row[ci];
                         return (
-                          <td key={ci} style={{ border: '1px solid #e2e8f0', padding: '4px 6px', textAlign: colType === 'check' ? 'center' : 'left' }}>
+                          <td key={ci} style={{ border: '1px solid #e2e8f0', padding: colType === 'check' ? '4px 2px' : '4px 6px', textAlign: colType === 'check' ? 'center' : 'left', width: colType === 'check' ? '52px' : undefined, overflow: 'hidden' }}>
                             {colType === 'check' && (
                               <input
                                 type="checkbox"
                                 checked={cellVal === true || cellVal === 'true'}
                                 onChange={function(e) { updateCell(ri, ci, e.target.checked); }}
-                                style={{ width: '18px', height: '18px', accentColor: '#4a9d5f', cursor: 'pointer' }}
+                                style={{ width: '16px', height: '16px', accentColor: '#4a9d5f', cursor: 'pointer' }}
                               />
                             )}
                             {colType === 'date' && (
@@ -464,15 +450,8 @@ const InspectionForm = ({ user }) => {
                               <input
                                 type="text"
                                 value={cellVal || ''}
-                                readOnly={defaultRows.length > 0 && (getColLabel(col) === 'S/N' || getColLabel(col) === 'Description')}
                                 onChange={function(e) { updateCell(ri, ci, e.target.value); }}
-                                style={{
-                                  border: 'none',
-                                  background: defaultRows.length > 0 && (getColLabel(col) === 'S/N' || getColLabel(col) === 'Description') ? '#f8fafc' : 'transparent',
-                                  width: '100%', minWidth: '60px', fontSize: '0.875rem', padding: '2px 4px',
-                                  color: '#1e293b',
-                                  fontWeight: defaultRows.length > 0 && getColLabel(col) === 'Description' ? '500' : 'normal'
-                                }}
+                                style={{ border: 'none', background: 'transparent', width: '100%', fontSize: '0.875rem', padding: '2px 4px', minWidth: 0 }}
                               />
                             )}
                           </td>
