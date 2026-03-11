@@ -424,25 +424,18 @@ const InspectionForm = ({ user }) => {
           handleFieldChange(field.id, current.filter(function(_, i) { return i !== rowIdx; }));
         };
 
-        // Column width strategy for mobile-first layout:
-        // ci=0 (S/N):        36px fixed
-        // check columns:     46px fixed each
-        // ci=1 (Description): takes ALL remaining space (no explicit width with tableLayout:fixed)
-        // other text cols (Remarks etc): capped at 80px so Description stays wide
-        // delete button:     30px fixed
-        var textColCount = 0;
-        columns.forEach(function(c) { if (getColType(c) === 'text') textColCount++; });
-        var getColWidth = function(col, ci) {
-          if (getColType(col) === 'check') return '46px';
-          if (ci === 0) return '36px';                    // S/N
-          if (ci === 1) return undefined;                  // Description — absorbs remaining space
-          if (getColType(col) === 'text') return '80px';  // Remarks / other text — capped narrow
-          return undefined;
+        // Column min-width strategy (tableLayout:auto — browser sizes naturally):
+        // S/N: 36px min, check cols: 48px min, Description: 160px min, other text: 90px min
+        var getColMinWidth = function(col, ci) {
+          if (ci === 0) return '36px';
+          if (getColType(col) === 'check') return '48px';
+          if (ci === 1) return '160px';   // Description — wide enough to read
+          return '90px';                   // Remarks / other text cols
         };
 
         return (
-          <div style={{ overflowX: 'auto', marginTop: '8px' }}>
-            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8rem', tableLayout: 'fixed' }}>
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginTop: '8px' }}>
+            <table style={{ borderCollapse: 'collapse', width: 'max-content', minWidth: '100%', fontSize: '0.85rem', tableLayout: 'auto' }}>
               <thead>
                 {hasGroups && (
                   <tr>
@@ -465,16 +458,14 @@ const InspectionForm = ({ user }) => {
                     return (
                       <th key={ci} style={{
                         border: '1px solid #e2e8f0',
-                        padding: '5px 4px',
+                        padding: '6px 8px',
                         background: '#f1f5f9',
                         color: '#374151',
                         fontWeight: 600,
-                        fontSize: '0.7rem',
-                        width: getColWidth(col, ci),
-                        textAlign: getColType(col) === 'check' ? 'center' : 'left',
-                        whiteSpace: 'normal',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
+                        fontSize: '0.75rem',
+                        minWidth: getColMinWidth(col, ci),
+                        whiteSpace: 'nowrap',
+                        textAlign: getColType(col) === 'check' ? 'center' : 'left'
                       }}>
                         {getColLabel(col)}
                       </th>
@@ -494,10 +485,9 @@ const InspectionForm = ({ user }) => {
                         return (
                           <td key={ci} style={{
                             border: '1px solid #e2e8f0',
-                            padding: colType === 'check' ? '4px 2px' : '3px 4px',
+                            padding: colType === 'check' ? '6px 4px' : '6px 8px',
                             textAlign: colType === 'check' ? 'center' : 'left',
-                            width: getColWidth(col, ci),
-                            overflow: 'hidden'
+                            verticalAlign: 'middle'
                           }}>
                             {colType === 'check' && (
                               <input
@@ -518,14 +508,11 @@ const InspectionForm = ({ user }) => {
                             {colType === 'text' && isReadOnly && (
                               <span style={{
                                 display: 'block',
-                                width: '100%',
-                                fontSize: ci === 0 ? '0.75rem' : '0.8rem',
-                                padding: '1px 2px',
+                                fontSize: ci === 0 ? '0.75rem' : '0.85rem',
                                 color: '#1e293b',
                                 fontWeight: getColLabel(col) === 'Description' ? '500' : 'normal',
-                                wordBreak: 'break-word',
                                 whiteSpace: 'normal',
-                                lineHeight: 1.3
+                                lineHeight: 1.4
                               }}>
                                 {cellVal !== undefined ? cellVal : ''}
                               </span>
