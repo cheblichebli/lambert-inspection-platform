@@ -56,7 +56,19 @@ const InspectionForm = ({ user }) => {
       const fields = typeof form.fields === 'string' ? JSON.parse(form.fields) : form.fields;
       const initialData = {};
       fields.forEach(field => {
-        initialData[field.id] = field.type === 'checkbox' ? false : '';
+        if (field.type === 'checkbox') {
+          initialData[field.id] = false;
+        } else if (field.type === 'table') {
+          // Seed with defaultRows if present, otherwise one blank row
+          initialData[field.id] = (field.defaultRows && field.defaultRows.length > 0)
+            ? field.defaultRows.map(function(dr) {
+                // defaultRows are objects keyed by column index or label — normalise to index-keyed
+                return Object.assign({}, dr);
+              })
+            : [{}];
+        } else {
+          initialData[field.id] = '';
+        }
       });
       setFormData(initialData);
     } catch (error) {
@@ -360,10 +372,10 @@ const InspectionForm = ({ user }) => {
           }
         }
 
-        var rows = formData[field.id] || [{}];
+        var rows = (Array.isArray(formData[field.id]) && formData[field.id].length > 0) ? formData[field.id] : [{}];
 
         var updateCell = function(rowIdx, colIdx, val) {
-          var current = formData[field.id] || [{}];
+          var current = Array.isArray(formData[field.id]) ? formData[field.id] : [{}];
           var newRows = current.map(function(r) { return Object.assign({}, r); });
           if (!newRows[rowIdx]) newRows[rowIdx] = {};
           newRows[rowIdx][colIdx] = val;
@@ -371,12 +383,12 @@ const InspectionForm = ({ user }) => {
         };
 
         var addRow = function() {
-          var current = formData[field.id] || [{}];
+          var current = Array.isArray(formData[field.id]) ? formData[field.id] : [{}];
           handleFieldChange(field.id, [...current, {}]);
         };
 
         var removeRow = function(rowIdx) {
-          var current = formData[field.id] || [{}];
+          var current = Array.isArray(formData[field.id]) ? formData[field.id] : [{}];
           if (current.length <= 1) return;
           handleFieldChange(field.id, current.filter(function(_, i) { return i !== rowIdx; }));
         };
@@ -411,8 +423,11 @@ const InspectionForm = ({ user }) => {
                         color: '#374151',
                         fontWeight: 600,
                         fontSize: '0.75rem',
-                        width: getColType(col) === 'check' ? '52px' : 'auto',
-                        textAlign: getColType(col) === 'check' ? 'center' : 'left'
+                        width: getColType(col) === 'check'
+                          ? '48px'
+                          : (ci === 0 ? '42px' : undefined),
+                        textAlign: getColType(col) === 'check' ? 'center' : 'left',
+                        wordBreak: 'break-word'
                       }}>
                         {getColLabel(col)}
                       </th>
@@ -429,7 +444,7 @@ const InspectionForm = ({ user }) => {
                         var colType = getColType(col);
                         var cellVal = row[ci];
                         return (
-                          <td key={ci} style={{ border: '1px solid #e2e8f0', padding: colType === 'check' ? '4px 2px' : '4px 6px', textAlign: colType === 'check' ? 'center' : 'left', width: colType === 'check' ? '52px' : undefined, overflow: 'hidden' }}>
+                          <td key={ci} style={{ border: '1px solid #e2e8f0', padding: colType === 'check' ? '4px 2px' : '4px 6px', textAlign: colType === 'check' ? 'center' : 'left', width: colType === 'check' ? '48px' : (ci === 0 ? '42px' : undefined), overflow: 'hidden', wordBreak: 'break-word' }}>
                             {colType === 'check' && (
                               <input
                                 type="checkbox"
