@@ -60,12 +60,21 @@ const InspectionForm = ({ user }) => {
           initialData[field.id] = false;
         } else if (field.type === 'table') {
           // Seed with defaultRows if present, otherwise one blank row
-          initialData[field.id] = (field.defaultRows && field.defaultRows.length > 0)
-            ? field.defaultRows.map(function(dr) {
-                // defaultRows are objects keyed by column index or label — normalise to index-keyed
-                return Object.assign({}, dr);
-              })
-            : [{}];
+          if (field.defaultRows && field.defaultRows.length > 0) {
+            const cols = field.columns || [];
+            const getCore = (c) => c.includes(' > ') ? c.split(' > ')[1].trim() : c;
+            const getLabel = (c) => getCore(c).replace(/^(text:|check:|date:)/, '');
+            initialData[field.id] = field.defaultRows.map(function(dr) {
+              const r = {};
+              cols.forEach(function(col, ci) {
+                const label = getLabel(col);
+                r[ci] = dr[label] !== undefined ? dr[label] : '';
+              });
+              return r;
+            });
+          } else {
+            initialData[field.id] = [{}];
+          }
         } else {
           initialData[field.id] = '';
         }
@@ -372,10 +381,28 @@ const InspectionForm = ({ user }) => {
           }
         }
 
-        var rows = (Array.isArray(formData[field.id]) && formData[field.id].length > 0) ? formData[field.id] : [{}];
+        // Build seed rows from defaultRows (label-keyed) -> numeric-index-keyed
+        var seedRows = (field.defaultRows && field.defaultRows.length > 0)
+          ? field.defaultRows.map(function(dr) {
+              var r = {};
+              columns.forEach(function(col, ci) {
+                var label = getColLabel(col);
+                r[ci] = (dr[label] !== undefined && dr[label] !== null) ? String(dr[label]) : '';
+              });
+              return r;
+            })
+          : [{}];
+
+        // Use live formData if inspector has already interacted; otherwise show seeded rows
+        var rows = (Array.isArray(formData[field.id]) && formData[field.id].length > 0)
+          ? formData[field.id]
+          : seedRows;
 
         var updateCell = function(rowIdx, colIdx, val) {
-          var current = Array.isArray(formData[field.id]) ? formData[field.id] : [{}];
+          // On first edit, upgrade seedRows into formData so changes persist
+          var current = (Array.isArray(formData[field.id]) && formData[field.id].length > 0)
+            ? formData[field.id]
+            : seedRows.map(function(r) { return Object.assign({}, r); });
           var newRows = current.map(function(r) { return Object.assign({}, r); });
           if (!newRows[rowIdx]) newRows[rowIdx] = {};
           newRows[rowIdx][colIdx] = val;
@@ -383,34 +410,49 @@ const InspectionForm = ({ user }) => {
         };
 
         var addRow = function() {
-          var current = Array.isArray(formData[field.id]) ? formData[field.id] : [{}];
+          var current = (Array.isArray(formData[field.id]) && formData[field.id].length > 0)
+            ? formData[field.id]
+            : seedRows.map(function(r) { return Object.assign({}, r); });
           handleFieldChange(field.id, [...current, {}]);
         };
 
         var removeRow = function(rowIdx) {
-          var current = Array.isArray(formData[field.id]) ? formData[field.id] : [{}];
+          var current = (Array.isArray(formData[field.id]) && formData[field.id].length > 0)
+            ? formData[field.id]
+            : seedRows.map(function(r) { return Object.assign({}, r); });
           if (current.length <= 1) return;
           handleFieldChange(field.id, current.filter(function(_, i) { return i !== rowIdx; }));
         };
 
+        // Column width strategy for mobile:
+        // S/N (ci=0, text): fixed narrow — 36px
+        // check columns: fixed 46px each
+        // text columns other than S/N: share remaining space equally (auto)
+        // delete button: 30px
+        var getColWidth = function(col, ci) {
+          if (getColType(col) === 'check') return '46px';
+          if (ci === 0) return '36px';  // S/N column
+          return undefined; // description / remarks — absorb remaining space
+        };
+
         return (
           <div style={{ overflowX: 'auto', marginTop: '8px' }}>
-            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.875rem', tableLayout: 'fixed' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.8rem', tableLayout: 'fixed' }}>
               <thead>
                 {hasGroups && (
                   <tr>
                     {groupHeaders.map(function(gh, ghi) {
                       return (
                         <th key={ghi} colSpan={gh.span} style={{
-                          border: '1px solid #e2e8f0', padding: '6px 10px',
+                          border: '1px solid #e2e8f0', padding: '5px 6px',
                           background: '#e2e8f0', color: '#1e293b', fontWeight: 700,
-                          textAlign: 'center', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em'
+                          textAlign: 'center', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em'
                         }}>
                           {gh.label}
                         </th>
                       );
                     })}
-                    <th style={{ border: '1px solid #e2e8f0', background: '#e2e8f0', width: '36px' }}></th>
+                    <th style={{ border: '1px solid #e2e8f0', background: '#e2e8f0', width: '30px' }}></th>
                   </tr>
                 )}
                 <tr>
@@ -418,22 +460,22 @@ const InspectionForm = ({ user }) => {
                     return (
                       <th key={ci} style={{
                         border: '1px solid #e2e8f0',
-                        padding: '6px 8px',
+                        padding: '5px 4px',
                         background: '#f1f5f9',
                         color: '#374151',
                         fontWeight: 600,
-                        fontSize: '0.75rem',
-                        width: getColType(col) === 'check'
-                          ? '48px'
-                          : (ci === 0 ? '42px' : undefined),
+                        fontSize: '0.7rem',
+                        width: getColWidth(col, ci),
                         textAlign: getColType(col) === 'check' ? 'center' : 'left',
-                        wordBreak: 'break-word'
+                        whiteSpace: getColType(col) === 'check' ? 'normal' : 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
                       }}>
                         {getColLabel(col)}
                       </th>
                     );
                   })}
-                  <th style={{ border: '1px solid #e2e8f0', padding: '8px', background: '#f1f5f9', width: '36px' }}></th>
+                  <th style={{ border: '1px solid #e2e8f0', padding: '5px', background: '#f1f5f9', width: '30px' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -443,8 +485,15 @@ const InspectionForm = ({ user }) => {
                       {columns.map(function(col, ci) {
                         var colType = getColType(col);
                         var cellVal = row[ci];
+                        var isReadOnly = (ci === 0 || getColLabel(col) === 'Description') && field.defaultRows && field.defaultRows.length > 0;
                         return (
-                          <td key={ci} style={{ border: '1px solid #e2e8f0', padding: colType === 'check' ? '4px 2px' : '4px 6px', textAlign: colType === 'check' ? 'center' : 'left', width: colType === 'check' ? '48px' : (ci === 0 ? '42px' : undefined), overflow: 'hidden', wordBreak: 'break-word' }}>
+                          <td key={ci} style={{
+                            border: '1px solid #e2e8f0',
+                            padding: colType === 'check' ? '4px 2px' : '3px 4px',
+                            textAlign: colType === 'check' ? 'center' : 'left',
+                            width: getColWidth(col, ci),
+                            overflow: 'hidden'
+                          }}>
                             {colType === 'check' && (
                               <input
                                 type="checkbox"
@@ -458,25 +507,35 @@ const InspectionForm = ({ user }) => {
                                 type="date"
                                 value={cellVal || ''}
                                 onChange={function(e) { updateCell(ri, ci, e.target.value); }}
-                                style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', width: '120px' }}
+                                style={{ border: 'none', background: 'transparent', fontSize: '0.75rem', width: '100%', minWidth: 0 }}
                               />
                             )}
                             {colType === 'text' && (
                               <input
                                 type="text"
-                                value={cellVal || ''}
+                                value={cellVal !== undefined ? cellVal : ''}
+                                readOnly={isReadOnly}
                                 onChange={function(e) { updateCell(ri, ci, e.target.value); }}
-                                style={{ border: 'none', background: 'transparent', width: '100%', fontSize: '0.875rem', padding: '2px 4px', minWidth: 0 }}
+                                style={{
+                                  border: 'none',
+                                  background: isReadOnly ? '#f8fafc' : 'transparent',
+                                  width: '100%',
+                                  minWidth: 0,
+                                  fontSize: ci === 0 ? '0.75rem' : '0.8rem',
+                                  padding: '1px 2px',
+                                  color: '#1e293b',
+                                  fontWeight: getColLabel(col) === 'Description' ? '500' : 'normal'
+                                }}
                               />
                             )}
                           </td>
                         );
                       })}
-                      <td style={{ border: '1px solid #e2e8f0', padding: '4px', textAlign: 'center' }}>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '2px', textAlign: 'center', width: '30px' }}>
                         <button
                           type="button"
                           onClick={function() { removeRow(ri); }}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '2px', lineHeight: 1 }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', padding: '2px', lineHeight: 1, fontSize: '1rem' }}
                         >
                           ×
                         </button>
