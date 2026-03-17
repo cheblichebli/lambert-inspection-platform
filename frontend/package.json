@@ -3,15 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.21.0",
     "axios": "^1.6.2",
+    "date-fns": "^3.0.6",
     "dexie": "^3.2.4",
     "dexie-react-hooks": "^1.1.7",
-    "react-camera-pro": "^1.2.1",
     "lucide-react": "^0.303.0",
-    "date-fns": "^3.0.6"
+    "moment": "^2.30.1",
+    "react": "^18.2.0",
+    "react-big-calendar": "^1.19.4",
+    "react-camera-pro": "^1.2.1",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.0"
   },
   "scripts": {
     "start": "react-scripts start",
