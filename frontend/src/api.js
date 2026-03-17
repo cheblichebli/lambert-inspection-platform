@@ -74,7 +74,6 @@ export const authAPI = {
 export const formsAPI = {
   getAll: async (category = null, isActive = true) => {
     if (!isOnline()) {
-      // Get from local DB
       let forms = await db.forms.toArray();
       if (category) {
         forms = forms.filter(f => f.category === category);
@@ -84,11 +83,11 @@ export const formsAPI = {
       }
       return forms;
     }
-    
+
     const params = new URLSearchParams();
     if (category) params.append('category', category);
     if (isActive !== null) params.append('isActive', isActive);
-    
+
     const response = await api.get(`/forms?${params.toString()}`);
     return response.data;
   },
@@ -122,14 +121,14 @@ export const inspectionsAPI = {
   getAll: async (filters = {}) => {
     if (!isOnline()) {
       let inspections = await db.inspections.toArray();
-      
+
       if (filters.status) {
         inspections = inspections.filter(i => i.status === filters.status);
       }
       if (filters.templateId) {
         inspections = inspections.filter(i => i.template_id === filters.templateId);
       }
-      
+
       return inspections;
     }
 
@@ -209,7 +208,7 @@ export const syncAPI = {
     }
 
     const unsyncedInspections = await db.getUnsyncedInspections();
-    
+
     if (unsyncedInspections.length === 0) {
       return { success: [], failed: [], totalSynced: 0 };
     }
@@ -286,6 +285,35 @@ export const systemAPI = {
 
   convertPdfForm: async (base64Data) => {
     const response = await api.post('/system/convert-pdf-form', { pdfBase64: base64Data });
+    return response.data;
+  },
+};
+
+// CAPA API (Corrective Action Management)
+export const capaAPI = {
+  getAll: async (filters = {}) => {
+    const params = new URLSearchParams(filters);
+    const response = await api.get(`/capa?${params.toString()}`);
+    return response.data;
+  },
+
+  create: async (data) => {
+    const response = await api.post('/capa', data);
+    return response.data;
+  },
+
+  update: async (id, data) => {
+    const response = await api.put(`/capa/${id}`, data);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    const response = await api.delete(`/capa/${id}`);
+    return response.data;
+  },
+
+  getStats: async () => {
+    const response = await api.get('/capa/stats');
     return response.data;
   },
 };
