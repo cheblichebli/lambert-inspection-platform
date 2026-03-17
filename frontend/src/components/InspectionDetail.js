@@ -445,19 +445,21 @@ const InspectionDetail = ({ user }) => {
   // ── CAPA handlers ────────────────────────────────────────────────────────
   const openCapaModal = (flagIndex, label) => {
     setCapaTarget({ flag_index: flagIndex, label });
-    setCapaForm({ assigned_to: '', due_date: '', priority: 'minor', description: '' });
+    setCapaForm({ title: '', assigned_to: '', due_date: '', priority: 'minor', description: '' });
     setCapaRecurrence(false);
     setShowCapaModal(true);
   };
 
   const handleAssignCapa = async () => {
+    const title = capaForm.title || capaTarget?.label;
+    if (!title) { alert('Please enter an issue title.'); return; }
     if (!capaForm.assigned_to) { alert('Please select a user to assign this action to.'); return; }
     setCapaSubmitting(true);
     try {
       const result = await capaAPI.create({
         inspection_id: inspection.id,
         flag_index: capaTarget.flag_index,
-        title: capaTarget.label,
+        title: title,
         description: capaForm.description,
         priority: capaForm.priority,
         assigned_to: capaForm.assigned_to,
@@ -828,6 +830,17 @@ const InspectionDetail = ({ user }) => {
               <button onClick={() => setReviewStatus('rejected')} className="btn btn-error" style={{ outline: reviewStatus === 'rejected' ? '3px solid #7f1d1d' : 'none', opacity: reviewStatus && reviewStatus !== 'rejected' ? 0.5 : 1 }}>
                 <XCircle size={20} /> Reject
               </button>
+              <button
+                onClick={() => openCapaModal(0, `${inspection.template_title} — ${inspection.location || inspection.equipment_id || 'Inspection'}`)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  padding: '10px 18px', background: '#ea580c', color: 'white',
+                  border: 'none', borderRadius: '8px', cursor: 'pointer',
+                  fontSize: '0.9rem', fontWeight: 600
+                }}
+              >
+                ⚑ Issue Corrective Action
+              </button>
             </div>
             <textarea value={reviewComments} onChange={(e) => setReviewComments(e.target.value)} placeholder="Comments..." className="form-control" style={{ marginBottom: '12px', minHeight: '80px' }} />
             <button onClick={handleReview} disabled={!reviewStatus || submitting} className="btn btn-primary">Submit Review</button>
@@ -868,15 +881,26 @@ const InspectionDetail = ({ user }) => {
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                   <div>
-                    <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', color: '#1e293b' }}>Assign Corrective Action</h3>
-                    <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
-                      ⚑ {capaTarget?.label}
-                    </p>
+                    <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', color: '#1e293b' }}>⚑ Issue Corrective Action</h3>
+                    <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>{inspection?.template_title}</p>
                   </div>
                   <button onClick={() => setShowCapaModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1.25rem', lineHeight: 1 }}>×</button>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Issue Title <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={capaForm.title || capaTarget?.label || ''}
+                      onChange={e => setCapaForm(f => ({ ...f, title: e.target.value }))}
+                      placeholder="Describe the non-conformance..."
+                      className="form-control"
+                    />
+                  </div>
 
                   <div>
                     <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
