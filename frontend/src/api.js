@@ -75,27 +75,19 @@ export const formsAPI = {
   getAll: async (category = null, isActive = true) => {
     if (!isOnline()) {
       let forms = await db.forms.toArray();
-      if (category) {
-        forms = forms.filter(f => f.category === category);
-      }
-      if (isActive !== null) {
-        forms = forms.filter(f => f.is_active === isActive);
-      }
+      if (category) forms = forms.filter(f => f.category === category);
+      if (isActive !== null) forms = forms.filter(f => f.is_active === isActive);
       return forms;
     }
-
     const params = new URLSearchParams();
     if (category) params.append('category', category);
     if (isActive !== null) params.append('isActive', isActive);
-
     const response = await api.get(`/forms?${params.toString()}`);
     return response.data;
   },
 
   getById: async (id) => {
-    if (!isOnline()) {
-      return await db.forms.get({ syncId: id });
-    }
+    if (!isOnline()) return await db.forms.get({ syncId: id });
     const response = await api.get(`/forms/${id}`);
     return response.data;
   },
@@ -121,17 +113,10 @@ export const inspectionsAPI = {
   getAll: async (filters = {}) => {
     if (!isOnline()) {
       let inspections = await db.inspections.toArray();
-
-      if (filters.status) {
-        inspections = inspections.filter(i => i.status === filters.status);
-      }
-      if (filters.templateId) {
-        inspections = inspections.filter(i => i.template_id === filters.templateId);
-      }
-
+      if (filters.status) inspections = inspections.filter(i => i.status === filters.status);
+      if (filters.templateId) inspections = inspections.filter(i => i.template_id === filters.templateId);
       return inspections;
     }
-
     const params = new URLSearchParams(filters);
     const response = await api.get(`/inspections?${params.toString()}`);
     return response.data;
@@ -148,39 +133,27 @@ export const inspectionsAPI = {
       }
       return inspection;
     }
-
     const response = await api.get(`/inspections/${id}`);
     return response.data;
   },
 
   create: async (inspectionData) => {
-    if (!isOnline()) {
-      return await db.createOfflineInspection(inspectionData);
-    }
-
+    if (!isOnline()) return await db.createOfflineInspection(inspectionData);
     const response = await api.post('/inspections', inspectionData);
     return response.data;
   },
 
   update: async (id, inspectionData) => {
     if (!isOnline()) {
-      await db.inspections.update(id, {
-        ...inspectionData,
-        updatedAt: new Date().toISOString(),
-        synced: false
-      });
+      await db.inspections.update(id, { ...inspectionData, updatedAt: new Date().toISOString(), synced: false });
       return { id, ...inspectionData };
     }
-
     const response = await api.put(`/inspections/${id}`, inspectionData);
     return response.data;
   },
 
   review: async (id, status, comments) => {
-    const response = await api.post(`/inspections/${id}/review`, {
-      status,
-      comments,
-    });
+    const response = await api.post(`/inspections/${id}/review`, { status, comments });
     return response.data;
   },
 
@@ -189,7 +162,6 @@ export const inspectionsAPI = {
       await db.inspections.delete(id);
       return { message: 'Deleted locally' };
     }
-
     const response = await api.delete(`/inspections/${id}`);
     return response.data;
   },
@@ -203,25 +175,13 @@ export const inspectionsAPI = {
 // Sync API
 export const syncAPI = {
   syncInspections: async () => {
-    if (!isOnline()) {
-      throw new Error('Cannot sync while offline');
-    }
-
+    if (!isOnline()) throw new Error('Cannot sync while offline');
     const unsyncedInspections = await db.getUnsyncedInspections();
-
-    if (unsyncedInspections.length === 0) {
-      return { success: [], failed: [], totalSynced: 0 };
-    }
-
-    const response = await api.post('/sync/inspections', {
-      inspections: unsyncedInspections,
-    });
-
-    // Mark synced inspections
+    if (unsyncedInspections.length === 0) return { success: [], failed: [], totalSynced: 0 };
+    const response = await api.post('/sync/inspections', { inspections: unsyncedInspections });
     for (const success of response.data.success) {
       await db.markInspectionSynced(success.syncId, success.serverId);
     }
-
     return response.data;
   },
 
@@ -289,7 +249,7 @@ export const systemAPI = {
   },
 };
 
-// CAPA API (Corrective Action Management)
+// CAPA API
 export const capaAPI = {
   getAll: async (filters = {}) => {
     const params = new URLSearchParams(filters);
@@ -314,6 +274,34 @@ export const capaAPI = {
 
   getStats: async () => {
     const response = await api.get('/capa/stats');
+    return response.data;
+  },
+};
+
+// Schedules API
+export const schedulesAPI = {
+  getAll: async () => {
+    const response = await api.get('/schedules');
+    return response.data;
+  },
+
+  getById: async (id) => {
+    const response = await api.get(`/schedules/${id}`);
+    return response.data;
+  },
+
+  create: async (data) => {
+    const response = await api.post('/schedules', data);
+    return response.data;
+  },
+
+  update: async (id, data) => {
+    const response = await api.put(`/schedules/${id}`, data);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    const response = await api.delete(`/schedules/${id}`);
     return response.data;
   },
 };
