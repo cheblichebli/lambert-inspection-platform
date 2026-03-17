@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { inspectionsAPI } from '../api';
+import { inspectionsAPI, capaAPI, usersAPI } from '../api';
 import { CheckCircle, XCircle, ArrowLeft, Download } from 'lucide-react';
 
 // ── PDF Export ────────────────────────────────────────────────────────────────
@@ -370,6 +370,8 @@ const generateInspectionPDF = (inspection, formData, templateFields, gpsAddress)
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
+
+// ── Component ─────────────────────────────────────────────────────────────────
 const InspectionDetail = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -382,6 +384,15 @@ const InspectionDetail = ({ user }) => {
   const [gpsAddress, setGpsAddress] = useState(null);
   const [gpsLoading, setGpsLoading] = useState(false);
 
+  // ── CAPA state ───────────────────────────────────────────────────────────
+  const [existingCapas, setExistingCapas] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [showCapaModal, setShowCapaModal] = useState(false);
+  const [capaTarget, setCapaTarget] = useState(null); // { flag_index, label }
+  const [capaForm, setCapaForm] = useState({ assigned_to: '', due_date: '', priority: 'minor', description: '' });
+  const [capaSubmitting, setCapaSubmitting] = useState(false);
+  const [capaRecurrence, setCapaRecurrence] = useState(false);
+
   useEffect(() => { loadInspection(); }, [id]);
 
   useEffect(() => {
@@ -389,15 +400,22 @@ const InspectionDetail = ({ user }) => {
       setGpsLoading(true);
       fetch(`https://nominatim.openstreetmap.org/reverse?lat=${inspection.gps_latitude}&lon=${inspection.gps_longitude}&format=json`)
         .then(r => r.json())
-        .then(data => {
-          if (data && data.display_name) {
-            setGpsAddress(data.display_name);
-          }
-        })
+        .then(data => { if (data && data.display_name) setGpsAddress(data.display_name); })
         .catch(() => {})
         .finally(() => setGpsLoading(false));
     }
   }, [inspection?.gps_latitude, inspection?.gps_longitude]);
+
+  // Load CAPA data and user list once inspection is loaded
+  useEffect(() => {
+    if (!inspection) return;
+    capaAPI.getAll({ inspectionId: inspection.id })
+      .then(setExistingCapas)
+      .catch(() => {});
+    if (user && ['admin', 'supervisor'].includes(user.role)) {
+      usersAPI.getAll().then(setAllUsers).catch(() => {});
+    }
+  }, [inspection?.id]);
 
   const loadInspection = async () => {
     try {
@@ -421,6 +439,37 @@ const InspectionDetail = ({ user }) => {
       alert('Review failed');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // ── CAPA handlers ────────────────────────────────────────────────────────
+  const openCapaModal = (flagIndex, label) => {
+    setCapaTarget({ flag_index: flagIndex, label });
+    setCapaForm({ assigned_to: '', due_date: '', priority: 'minor', description: '' });
+    setCapaRecurrence(false);
+    setShowCapaModal(true);
+  };
+
+  const handleAssignCapa = async () => {
+    if (!capaForm.assigned_to) { alert('Please select a user to assign this action to.'); return; }
+    setCapaSubmitting(true);
+    try {
+      const result = await capaAPI.create({
+        inspection_id: inspection.id,
+        flag_index: capaTarget.flag_index,
+        title: capaTarget.label,
+        description: capaForm.description,
+        priority: capaForm.priority,
+        assigned_to: capaForm.assigned_to,
+        due_date: capaForm.due_date || null,
+      });
+      setExistingCapas(prev => [...prev, result]);
+      if (result.recurrence_detected) setCapaRecurrence(true);
+      else setShowCapaModal(false);
+    } catch (error) {
+      alert('Failed to assign CAPA. Please try again.');
+    } finally {
+      setCapaSubmitting(false);
     }
   };
 
@@ -521,6 +570,16 @@ const InspectionDetail = ({ user }) => {
     : null;
 
   const statusColors = { draft: '#64748b', submitted: '#3b82f6', approved: '#10b981', rejected: '#ef4444' };
+  const priorityColors = { critical: '#dc2626', major: '#d97706', minor: '#64748b' };
+  const capaStatusColors = { open: '#3b82f6', in_progress: '#d97706', closed: '#10b981' };
+
+  // Parse flags array from inspection — backend stores as JSON array or null
+  const flags = (() => {
+    try {
+      if (!inspection.flags) return [];
+      return typeof inspection.flags === 'string' ? JSON.parse(inspection.flags) : inspection.flags;
+    } catch (e) { return []; }
+  })();
 
   return (
     <div className="page-container">
@@ -681,6 +740,84 @@ const InspectionDetail = ({ user }) => {
           </div>
         )}
 
+        {/* ── Flagged Items & CAPA ─────────────────────────────────────────── */}
+        {flags.length > 0 && (
+          <div className="detail-section">
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              ⚑ Flagged Items
+              <span style={{ fontSize: '0.8rem', fontWeight: 400, color: '#64748b' }}>
+                ({flags.length} non-conformance{flags.length !== 1 ? 's' : ''})
+              </span>
+            </h2>
+            {flags.map((flag, i) => {
+              const capa = existingCapas.find(c => c.flag_index === flag.flag_index);
+              return (
+                <div key={i} style={{
+                  border: `1.5px solid ${capa ? '#e2e8f0' : '#fca5a5'}`,
+                  borderLeft: `4px solid ${capa ? capaStatusColors[capa.status] || '#64748b' : '#ef4444'}`,
+                  borderRadius: '8px', padding: '12px 16px', marginBottom: '10px',
+                  background: capa ? '#f8fafc' : '#fff5f5'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                    <div>
+                      <p style={{ fontWeight: 600, color: '#1e293b', margin: '0 0 4px' }}>
+                        ⚑ Item #{(flag.flag_index ?? i) + 1}
+                        {flag.label ? ` — ${flag.label}` : ''}
+                      </p>
+                      {flag.note && <p style={{ fontSize: '0.875rem', color: '#4b5563', margin: 0 }}>{flag.note}</p>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      {capa ? (
+                        <span style={{
+                          padding: '3px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600,
+                          background: capaStatusColors[capa.status] || '#64748b', color: 'white', textTransform: 'capitalize'
+                        }}>
+                          {capa.status.replace('_', ' ')}
+                        </span>
+                      ) : (
+                        user && ['admin', 'supervisor'].includes(user.role) && (
+                          <button
+                            onClick={() => openCapaModal(flag.flag_index ?? i, flag.label || `Item ${(flag.flag_index ?? i) + 1}`)}
+                            style={{
+                              padding: '5px 12px', background: '#dc2626', color: 'white', border: 'none',
+                              borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600
+                            }}
+                          >
+                            + Assign CAPA
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+                  {capa && (
+                    <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '0.8rem', color: '#64748b' }}>
+                      <span>
+                        <strong>Assigned to:</strong> {capa.assigned_to_name || '—'}
+                      </span>
+                      <span>
+                        <strong>Priority:</strong>{' '}
+                        <span style={{ color: priorityColors[capa.priority] || '#64748b', fontWeight: 600, textTransform: 'capitalize' }}>
+                          {capa.priority}
+                        </span>
+                      </span>
+                      {capa.due_date && (
+                        <span>
+                          <strong>Due:</strong>{' '}
+                          {new Date(capa.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </span>
+                      )}
+                      {capa.description && (
+                        <span style={{ width: '100%' }}><strong>Note:</strong> {capa.description}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── Review Section ───────────────────────────────────────────────── */}
         {inspection.status === 'submitted' && user && ['supervisor', 'admin'].includes(user.role) && (
           <div className="review-section">
             <h2>Review</h2>
@@ -699,6 +836,7 @@ const InspectionDetail = ({ user }) => {
 
       </div>
 
+      {/* ── Expanded Photo Lightbox ─────────────────────────────────────────── */}
       {expandedPhoto && (
         <div onClick={() => setExpandedPhoto(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, cursor: 'zoom-out', padding: '20px' }}>
           <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
@@ -708,6 +846,113 @@ const InspectionDetail = ({ user }) => {
           </div>
         </div>
       )}
+
+      {/* ── CAPA Assignment Modal ───────────────────────────────────────────── */}
+      {showCapaModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', padding: '28px', width: '100%', maxWidth: '500px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+
+            {capaRecurrence ? (
+              <>
+                <div style={{ background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '8px', padding: '14px 16px', marginBottom: '20px' }}>
+                  <p style={{ margin: 0, fontWeight: 700, color: '#92400e' }}>⚠️ Recurrence Detected</p>
+                  <p style={{ margin: '4px 0 0', fontSize: '0.875rem', color: '#78350f' }}>
+                    This same issue has been flagged on this equipment within the last 90 days. The CAPA has been assigned. Consider escalating the priority.
+                  </p>
+                </div>
+                <button onClick={() => setShowCapaModal(false)} className="btn btn-primary" style={{ width: '100%' }}>
+                  Close
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                  <div>
+                    <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', color: '#1e293b' }}>Assign Corrective Action</h3>
+                    <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
+                      ⚑ {capaTarget?.label}
+                    </p>
+                  </div>
+                  <button onClick={() => setShowCapaModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1.25rem', lineHeight: 1 }}>×</button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Assign To <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <select
+                      value={capaForm.assigned_to}
+                      onChange={e => setCapaForm(f => ({ ...f, assigned_to: e.target.value }))}
+                      className="form-control"
+                    >
+                      <option value="">Select user...</option>
+                      {allUsers.filter(u => u.is_active).map(u => (
+                        <option key={u.id} value={u.id}>{u.full_name} ({u.role})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Priority</label>
+                      <select
+                        value={capaForm.priority}
+                        onChange={e => setCapaForm(f => ({ ...f, priority: e.target.value }))}
+                        className="form-control"
+                        style={{ borderColor: capaForm.priority === 'critical' ? '#dc2626' : capaForm.priority === 'major' ? '#d97706' : '#e2e8f0' }}
+                      >
+                        <option value="minor">Minor</option>
+                        <option value="major">Major</option>
+                        <option value="critical">Critical</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Due Date</label>
+                      <input
+                        type="date"
+                        value={capaForm.due_date}
+                        onChange={e => setCapaForm(f => ({ ...f, due_date: e.target.value }))}
+                        className="form-control"
+                        min={new Date().toISOString().split('T')[0]}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Description / Instructions</label>
+                    <textarea
+                      value={capaForm.description}
+                      onChange={e => setCapaForm(f => ({ ...f, description: e.target.value }))}
+                      placeholder="Describe the corrective action required..."
+                      className="form-control"
+                      rows={3}
+                    />
+                  </div>
+
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  <button onClick={() => setShowCapaModal(false)} className="btn btn-secondary" style={{ flex: 1 }}>
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAssignCapa}
+                    disabled={capaSubmitting || !capaForm.assigned_to}
+                    className="btn btn-primary"
+                    style={{ flex: 2, background: '#dc2626', borderColor: '#dc2626' }}
+                  >
+                    {capaSubmitting ? 'Assigning...' : 'Assign CAPA'}
+                  </button>
+                </div>
+              </>
+            )}
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
