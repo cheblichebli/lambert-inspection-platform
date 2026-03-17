@@ -2,25 +2,52 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 
-// GET /api/schedules — get all active schedules (all roles)
+// GET /api/schedules — get all active schedules
+// Admins/supervisors see all; inspectors see only their assigned schedules
 router.get('/', authenticateToken, async (req, res) => {
   const db = req.app.get('db');
+  const user = req.user;
   try {
-    const result = await db.query(`
-      SELECT
-        s.*,
-        u.full_name AS assigned_to_name,
-        u.email AS assigned_to_email,
-        cb.full_name AS created_by_name,
-        ft.title AS form_title,
-        ft.category AS form_category
-      FROM inspection_schedules s
-      LEFT JOIN users u ON s.assigned_to = u.id
-      LEFT JOIN users cb ON s.created_by = cb.id
-      LEFT JOIN form_templates ft ON s.form_template_id = ft.id
-      WHERE s.is_active = TRUE
-      ORDER BY s.start_date ASC
-    `);
+    let query;
+    let params = [];
+
+    if (user.role === 'inspector') {
+      query = `
+        SELECT
+          s.*,
+          u.full_name AS assigned_to_name,
+          u.email AS assigned_to_email,
+          cb.full_name AS created_by_name,
+          ft.title AS form_title,
+          ft.category AS form_category
+        FROM inspection_schedules s
+        LEFT JOIN users u ON s.assigned_to = u.id
+        LEFT JOIN users cb ON s.created_by = cb.id
+        LEFT JOIN form_templates ft ON s.form_template_id = ft.id
+        WHERE s.is_active = TRUE
+          AND s.assigned_to = $1
+        ORDER BY s.start_date ASC
+      `;
+      params = [parseInt(user.id)];
+    } else {
+      query = `
+        SELECT
+          s.*,
+          u.full_name AS assigned_to_name,
+          u.email AS assigned_to_email,
+          cb.full_name AS created_by_name,
+          ft.title AS form_title,
+          ft.category AS form_category
+        FROM inspection_schedules s
+        LEFT JOIN users u ON s.assigned_to = u.id
+        LEFT JOIN users cb ON s.created_by = cb.id
+        LEFT JOIN form_templates ft ON s.form_template_id = ft.id
+        WHERE s.is_active = TRUE
+        ORDER BY s.start_date ASC
+      `;
+    }
+
+    const result = await db.query(query, params);
     res.json(result.rows);
   } catch (err) {
     console.error('Schedules GET error:', err);
@@ -95,7 +122,6 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'supervisor'), async
       req.user.id
     ]);
 
-    // Fetch with joined fields to return full object
     const full = await db.query(`
       SELECT
         s.*,
@@ -164,7 +190,6 @@ router.put('/:id', authenticateToken, authorizeRoles('admin', 'supervisor'), asy
       req.params.id
     ]);
 
-    // Fetch with joined fields
     const full = await db.query(`
       SELECT
         s.*,
