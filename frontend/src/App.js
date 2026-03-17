@@ -13,6 +13,7 @@ import Navigation from './components/Navigation';
 import AdminDashboard from './components/AdminDashboard';
 import AuditLogs from './components/AuditLogs';
 import CorrectiveActions from './components/CorrectiveActions';
+import Schedule from './components/Schedule';
 import './App.css';
 
 function App() {
@@ -25,8 +26,6 @@ function App() {
     setUser(currentUser);
     setLoading(false);
 
-    // Only download offline data if cache is stale (older than 5 minutes)
-    // Prevents a multi-MB sync request on every single page load/refresh
     if (currentUser && navigator.onLine) {
       const lastSync = localStorage.getItem('lastOfflineSync');
       const FIVE_MIN = 5 * 60 * 1000;
@@ -164,6 +163,12 @@ function App() {
             <Route
               path="/capa"
               element={user ? <CorrectiveActions user={user} /> : <Navigate to="/login" />}
+            />
+
+            {/* Schedule — all roles can view */}
+            <Route
+              path="/schedule"
+              element={user ? <Schedule user={user} /> : <Navigate to="/login" />}
             />
 
             <Route path="*" element={<Navigate to="/" />} />
