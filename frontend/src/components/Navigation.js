@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, ClipboardCheck, FileText, Users, LogOut, Settings, Menu, X, Shield } from 'lucide-react';
+import { Home, ClipboardCheck, FileText, Users, LogOut, Settings, Menu, X, Shield, AlertTriangle } from 'lucide-react';
 import SyncStatus from './SyncStatus';
 
 const Navigation = ({ user, onLogout, isOnline }) => {
@@ -43,6 +43,16 @@ const Navigation = ({ user, onLogout, isOnline }) => {
           >
             <ClipboardCheck size={20} />
             <span>Inspections</span>
+          </Link>
+
+          {/* CAPA — visible to all roles */}
+          <Link
+            to="/capa"
+            className={`nav-link ${isActive('/capa') ? 'nav-link-active' : ''}`}
+            onClick={() => setIsOpen(false)}
+          >
+            <AlertTriangle size={20} />
+            <span>CAPA</span>
           </Link>
 
           {['admin', 'supervisor'].includes(user?.role) && (
