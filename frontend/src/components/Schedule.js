@@ -106,20 +106,22 @@ const Schedule = ({ user }) => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [schedulesData, formsData, usersData] = await Promise.all([
-        schedulesAPI.getAll(),
-        formsAPI.getAll(null, true),
-        usersAPI.getAll(),
-      ]);
+      const schedulesData = await schedulesAPI.getAll();
       setSchedules(schedulesData);
-      setForms(formsData);
-      setInspectors(usersData.filter(u => u.is_active));
+      if (isSupervisor) {
+        const [formsData, usersData] = await Promise.all([
+          formsAPI.getAll(null, true),
+          usersAPI.getAll(),
+        ]);
+        setForms(formsData);
+        setInspectors(usersData.filter(u => u.is_active));
+      }
     } catch (err) {
       console.error('Failed to load schedule data:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isSupervisor]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
