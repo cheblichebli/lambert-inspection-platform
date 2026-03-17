@@ -12,6 +12,7 @@ import UserManagement from './components/UserManagement';
 import Navigation from './components/Navigation';
 import AdminDashboard from './components/AdminDashboard';
 import AuditLogs from './components/AuditLogs';
+import CorrectiveActions from './components/CorrectiveActions';
 import './App.css';
 
 function App() {
@@ -157,6 +158,12 @@ function App() {
                   <Navigate to="/" />
                 )
               }
+            />
+
+            {/* CAPA — all roles, scoped by backend */}
+            <Route
+              path="/capa"
+              element={user ? <CorrectiveActions user={user} /> : <Navigate to="/login" />}
             />
 
             <Route path="*" element={<Navigate to="/" />} />
