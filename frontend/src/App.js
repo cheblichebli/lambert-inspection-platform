@@ -1,20 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { authAPI, syncAPI } from './api';
 import Login from './components/Login';
-import Dashboard from './components/Dashboard';
-import InspectionList from './components/InspectionList';
-import InspectionForm from './components/InspectionForm';
-import InspectionDetail from './components/InspectionDetail';
-import FormBuilder from './components/FormBuilder';
-import FormList from './components/FormList';
-import UserManagement from './components/UserManagement';
 import Navigation from './components/Navigation';
-import AdminDashboard from './components/AdminDashboard';
-import AuditLogs from './components/AuditLogs';
-import CorrectiveActions from './components/CorrectiveActions';
-import Schedule from './components/Schedule';
 import './App.css';
+
+// Lazy-loaded route components — each loads only when first visited
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const InspectionList = lazy(() => import('./components/InspectionList'));
+const InspectionForm = lazy(() => import('./components/InspectionForm'));
+const InspectionDetail = lazy(() => import('./components/InspectionDetail'));
+const FormBuilder = lazy(() => import('./components/FormBuilder'));
+const FormList = lazy(() => import('./components/FormList'));
+const UserManagement = lazy(() => import('./components/UserManagement'));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
+const AuditLogs = lazy(() => import('./components/AuditLogs'));
+const CorrectiveActions = lazy(() => import('./components/CorrectiveActions'));
+const Schedule = lazy(() => import('./components/Schedule'));
+
+// Fallback shown while a lazy component is loading
+function PageLoader() {
+  return (
+    <div className="loading-screen">
+      <div className="spinner"></div>
+      <p>Loading...</p>
+    </div>
+  );
+}
 
 function App() {
   const [user, setUser] = useState(null);
@@ -79,100 +91,102 @@ function App() {
         {user && <Navigation user={user} onLogout={handleLogout} isOnline={isOnline} />}
 
         <div className={user ? "main-content" : "login-page-wrapper"}>
-          <Routes>
-            <Route
-              path="/login"
-              element={user ? <Navigate to="/" /> : <Login onLogin={setUser} />}
-            />
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route
+                path="/login"
+                element={user ? <Navigate to="/" /> : <Login onLogin={setUser} />}
+              />
 
-            <Route
-              path="/"
-              element={user ? <Dashboard user={user} /> : <Navigate to="/login" />}
-            />
+              <Route
+                path="/"
+                element={user ? <Dashboard user={user} /> : <Navigate to="/login" />}
+              />
 
-            <Route
-              path="/admin"
-              element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/dashboard" />}
-            />
+              <Route
+                path="/admin"
+                element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/dashboard" />}
+              />
 
-            <Route
-              path="/audit-logs"
-              element={user?.role === 'admin' ? <AuditLogs /> : <Navigate to="/dashboard" />}
-            />
+              <Route
+                path="/audit-logs"
+                element={user?.role === 'admin' ? <AuditLogs /> : <Navigate to="/dashboard" />}
+              />
 
-            <Route
-              path="/inspections"
-              element={user ? <InspectionList user={user} /> : <Navigate to="/login" />}
-            />
+              <Route
+                path="/inspections"
+                element={user ? <InspectionList user={user} /> : <Navigate to="/login" />}
+              />
 
-            <Route
-              path="/inspections/new"
-              element={user ? <InspectionForm user={user} /> : <Navigate to="/login" />}
-            />
+              <Route
+                path="/inspections/new"
+                element={user ? <InspectionForm user={user} /> : <Navigate to="/login" />}
+              />
 
-            <Route
-              path="/inspections/:id"
-              element={user ? <InspectionDetail user={user} /> : <Navigate to="/login" />}
-            />
+              <Route
+                path="/inspections/:id"
+                element={user ? <InspectionDetail user={user} /> : <Navigate to="/login" />}
+              />
 
-            <Route
-              path="/forms"
-              element={
-                user && ['admin', 'supervisor'].includes(user.role) ? (
-                  <FormList user={user} />
-                ) : (
-                  <Navigate to="/" />
-                )
-              }
-            />
+              <Route
+                path="/forms"
+                element={
+                  user && ['admin', 'supervisor'].includes(user.role) ? (
+                    <FormList user={user} />
+                  ) : (
+                    <Navigate to="/" />
+                  )
+                }
+              />
 
-            <Route
-              path="/forms/new"
-              element={
-                user && user.role === 'admin' ? (
-                  <FormBuilder />
-                ) : (
-                  <Navigate to="/" />
-                )
-              }
-            />
+              <Route
+                path="/forms/new"
+                element={
+                  user && user.role === 'admin' ? (
+                    <FormBuilder />
+                  ) : (
+                    <Navigate to="/" />
+                  )
+                }
+              />
 
-            <Route
-              path="/forms/:id/edit"
-              element={
-                user && user.role === 'admin' ? (
-                  <FormBuilder />
-                ) : (
-                  <Navigate to="/" />
-                )
-              }
-            />
+              <Route
+                path="/forms/:id/edit"
+                element={
+                  user && user.role === 'admin' ? (
+                    <FormBuilder />
+                  ) : (
+                    <Navigate to="/" />
+                  )
+                }
+              />
 
-            <Route
-              path="/users"
-              element={
-                user && user.role === 'admin' ? (
-                  <UserManagement />
-                ) : (
-                  <Navigate to="/" />
-                )
-              }
-            />
+              <Route
+                path="/users"
+                element={
+                  user && user.role === 'admin' ? (
+                    <UserManagement />
+                  ) : (
+                    <Navigate to="/" />
+                  )
+                }
+              />
 
-            {/* CAPA — all roles, scoped by backend */}
-            <Route
-              path="/capa"
-              element={user ? <CorrectiveActions user={user} /> : <Navigate to="/login" />}
-            />
+              {/* CAPA — all roles, scoped by backend */}
+              <Route
+                path="/capa"
+                element={user ? <CorrectiveActions user={user} /> : <Navigate to="/login" />}
+              />
 
-            {/* Schedule — all roles can view */}
-            <Route
-              path="/schedule"
-              element={user ? <Schedule user={user} /> : <Navigate to="/login" />}
-            />
+              {/* Schedule — all roles can view */}
+              <Route
+                path="/schedule"
+                element={user ? <Schedule user={user} /> : <Navigate to="/login" />}
+              />
 
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </Suspense>
         </div>
       </div>
     </Router>
