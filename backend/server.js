@@ -23,12 +23,12 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Rate limiter — login endpoint only
-// Max 5 attempts per 15 minutes per IP
+// 20 attempts per 5 minutes per IP — catches bots/brute force without blocking real users
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  skipSuccessfulRequests: true, // Only count failed attempts
-  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
+  windowMs: 5 * 60 * 1000,
+  max: 20,
+  skipSuccessfulRequests: true,
+  message: { error: 'Too many login attempts from this device. Please try again in 5 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -37,7 +37,7 @@ const loginLimiter = rateLimit({
 app.set('db', pool);
 
 // Routes
-app.use('/api/auth/login', loginLimiter); // Apply rate limit to login only
+app.use('/api/auth/login', loginLimiter);
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/forms', require('./routes/forms'));
