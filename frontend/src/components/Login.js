@@ -20,12 +20,14 @@ const Login = ({ onLogin }) => {
       return;
     }
 
-    setError('');
-    setErrorType('');
+    // Don't clear error here — only clear it after we get a response
     setLoading(true);
 
     try {
       const data = await authAPI.login(email, password, keepLoggedIn);
+      // Success — clear any previous error and proceed
+      setError('');
+      setErrorType('');
       onLogin(data.user);
     } catch (err) {
       const message = err.response?.data?.error || 'Login failed. Please try again.';
@@ -45,7 +47,6 @@ const Login = ({ onLogin }) => {
     }
   };
 
-  // Pick the right error icon and style based on error type
   const getErrorStyle = () => {
     if (errorType === 'locked') return { backgroundColor: '#fef2f2', borderColor: '#fca5a5', color: '#991b1b' };
     if (errorType === 'rate_limited') return { backgroundColor: '#fff7ed', borderColor: '#fdba74', color: '#92400e' };
@@ -54,7 +55,6 @@ const Login = ({ onLogin }) => {
 
   const getErrorIcon = () => {
     if (errorType === 'locked') return <Lock size={18} style={{ flexShrink: 0 }} />;
-    if (errorType === 'rate_limited') return <AlertTriangle size={18} style={{ flexShrink: 0 }} />;
     return <AlertTriangle size={18} style={{ flexShrink: 0 }} />;
   };
 
@@ -84,7 +84,15 @@ const Login = ({ onLogin }) => {
               id="email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                // Only clear error when user edits email, not password
+                // so the error stays visible while they retype their password
+                if (errorType !== 'locked') {
+                  setError('');
+                  setErrorType('');
+                }
+              }}
               placeholder="your.email@lambertelectromec.com"
               required
               disabled={loading || !isOnline}
@@ -125,7 +133,6 @@ const Login = ({ onLogin }) => {
             </div>
           )}
 
-          {/* Keep me logged in */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -138,21 +145,11 @@ const Login = ({ onLogin }) => {
               checked={keepLoggedIn}
               onChange={(e) => setKeepLoggedIn(e.target.checked)}
               disabled={loading || !isOnline}
-              style={{
-                width: '16px',
-                height: '16px',
-                accentColor: '#4a9d5f',
-                cursor: 'pointer'
-              }}
+              style={{ width: '16px', height: '16px', accentColor: '#4a9d5f', cursor: 'pointer' }}
             />
             <label
               htmlFor="keepLoggedIn"
-              style={{
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-                color: '#64748b',
-                userSelect: 'none'
-              }}
+              style={{ cursor: 'pointer', fontSize: '0.9rem', color: '#64748b', userSelect: 'none' }}
             >
               Keep me logged in for 7 days
             </label>
