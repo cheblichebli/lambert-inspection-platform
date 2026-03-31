@@ -117,7 +117,7 @@ const Schedule = ({ user }) => {
   // ── Check if current user can start a schedule ───────────────────────────
   const canStart = (schedule) => {
     if (schedule.status === 'completed') return false;
-    if (isSupervisor) return true;
+    if (user?.role !== 'inspector') return false;
     return schedule.assigned_to === user?.id;
   };
 
