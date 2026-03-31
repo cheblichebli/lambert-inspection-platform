@@ -217,6 +217,19 @@ const InspectionForm = ({ user }) => {
     }
   };
 
+  const handleCancel = async () => {
+    if (!window.confirm('Cancel this inspection? It will be removed and the schedule will return to Pending.')) return;
+    try {
+      // If launched from a schedule, reset it back to pending
+      if (scheduleId) {
+        await schedulesAPI.cancelStart(scheduleId);
+      }
+    } catch (e) {
+      console.error('Failed to reset schedule:', e);
+    }
+    navigate('/schedule');
+  };
+
   const renderField = (field) => {
     switch (field.type) {
       case 'text':
@@ -543,6 +556,16 @@ const InspectionForm = ({ user }) => {
             </div>
 
             <div className="form-actions">
+              {scheduleId && (
+                <button
+                  onClick={handleCancel}
+                  className="btn"
+                  disabled={loading}
+                  style={{ backgroundColor: '#ef4444', color: 'white', border: 'none' }}
+                >
+                  <X size={20} /> Cancel Inspection
+                </button>
+              )}
               <button onClick={() => handleSubmit('draft')} className="btn btn-secondary" disabled={loading}>
                 <Save size={20} /> Save Draft
               </button>
