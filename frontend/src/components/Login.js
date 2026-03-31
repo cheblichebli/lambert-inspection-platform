@@ -1,15 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { authAPI } from '../api';
 import { WifiOff, AlertTriangle, Lock } from 'lucide-react';
+
+const ERROR_DISPLAY_MS = 3000; // 3 seconds
 
 const Login = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [error, setError] = useState('');
-  const [errorType, setErrorType] = useState(''); // 'locked', 'rate_limited', 'general'
+  const [errorType, setErrorType] = useState('');
   const [loading, setLoading] = useState(false);
+  const [frozen, setFrozen] = useState(false);
   const isOnline = navigator.onLine;
+
+  // After every error, freeze for 3 seconds then always re-enable
+  useEffect(() => {
+    if (!frozen) return;
+
+    const timer = setTimeout(() => {
+      setFrozen(false);
+      setError('');
+      setErrorType('');
+    }, ERROR_DISPLAY_MS);
+
+    return () => clearTimeout(timer);
+  }, [frozen]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,17 +33,17 @@ const Login = ({ onLogin }) => {
     if (!isOnline) {
       setError('Cannot login while offline. Please connect to the internet.');
       setErrorType('general');
+      setFrozen(true);
       return;
     }
 
-    // Don't clear error here — only clear it after we get a response
     setLoading(true);
 
     try {
       const data = await authAPI.login(email, password, keepLoggedIn);
-      // Success — clear any previous error and proceed
       setError('');
       setErrorType('');
+      setFrozen(false);
       onLogin(data.user);
     } catch (err) {
       const message = err.response?.data?.error || 'Login failed. Please try again.';
@@ -42,6 +58,7 @@ const Login = ({ onLogin }) => {
       }
 
       setError(message);
+      setFrozen(true); // Always freeze for 3s, always re-enables after
     } finally {
       setLoading(false);
     }
@@ -57,6 +74,8 @@ const Login = ({ onLogin }) => {
     if (errorType === 'locked') return <Lock size={18} style={{ flexShrink: 0 }} />;
     return <AlertTriangle size={18} style={{ flexShrink: 0 }} />;
   };
+
+  const isDisabled = loading || frozen || !isOnline;
 
   return (
     <div className="login-container">
@@ -84,18 +103,10 @@ const Login = ({ onLogin }) => {
               id="email"
               type="email"
               value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                // Only clear error when user edits email, not password
-                // so the error stays visible while they retype their password
-                if (errorType !== 'locked') {
-                  setError('');
-                  setErrorType('');
-                }
-              }}
+              onChange={(e) => setEmail(e.target.value)}
               placeholder="your.email@lambertelectromec.com"
               required
-              disabled={loading || !isOnline}
+              disabled={isDisabled}
               style={{ width: '100%', boxSizing: 'border-box' }}
             />
           </div>
@@ -109,7 +120,7 @@ const Login = ({ onLogin }) => {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
               required
-              disabled={loading || !isOnline || errorType === 'locked'}
+              disabled={isDisabled}
               style={{ width: '100%', boxSizing: 'border-box' }}
             />
           </div>
@@ -133,18 +144,13 @@ const Login = ({ onLogin }) => {
             </div>
           )}
 
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '16px'
-          }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
             <input
               type="checkbox"
               id="keepLoggedIn"
               checked={keepLoggedIn}
               onChange={(e) => setKeepLoggedIn(e.target.checked)}
-              disabled={loading || !isOnline}
+              disabled={isDisabled}
               style={{ width: '16px', height: '16px', accentColor: '#4a9d5f', cursor: 'pointer' }}
             />
             <label
@@ -158,16 +164,10 @@ const Login = ({ onLogin }) => {
           <button
             type="submit"
             className="btn btn-primary btn-block"
-            disabled={loading || !isOnline || errorType === 'locked'}
+            disabled={isDisabled}
           >
-            {loading ? 'Logging in...' : errorType === 'locked' ? 'Account Locked' : 'Login'}
+            {loading ? 'Logging in...' : frozen ? 'Please wait...' : 'Login'}
           </button>
-
-          {errorType === 'locked' && (
-            <p style={{ textAlign: 'center', fontSize: '13px', color: '#64748b', marginTop: '12px' }}>
-              Contact your administrator to unlock your account.
-            </p>
-          )}
         </form>
       </div>
     </div>
