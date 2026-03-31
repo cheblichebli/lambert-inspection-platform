@@ -323,6 +323,12 @@ export const schedulesAPI = {
     const response = await api.put(`/schedules/${id}`, { status: 'completed' });
     return response.data;
   },
+
+  // Reset a schedule back to pending when inspector cancels
+  cancelStart: async (id) => {
+    const response = await api.post(`/schedules/${id}/cancel`);
+    return response.data;
+  },
 };
 
 export default api;
