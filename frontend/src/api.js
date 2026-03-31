@@ -311,6 +311,18 @@ export const schedulesAPI = {
     const response = await api.delete(`/schedules/${id}`);
     return response.data;
   },
+
+  // Launch a pre-populated inspection from a schedule
+  start: async (id) => {
+    const response = await api.post(`/schedules/${id}/start`);
+    return response.data;
+  },
+
+  // Mark a schedule as completed after inspection is submitted
+  complete: async (id) => {
+    const response = await api.put(`/schedules/${id}`, { status: 'completed' });
+    return response.data;
+  },
 };
 
 export default api;
