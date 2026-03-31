@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { authAPI } from '../api';
 import { WifiOff, AlertTriangle, Lock } from 'lucide-react';
+
+const FREEZE_MS = 5000; // 5 seconds for all error types
 
 const Login = ({ onLogin }) => {
   const [email, setEmail] = useState('');
@@ -13,39 +15,33 @@ const Login = ({ onLogin }) => {
   const timerRef = useRef(null);
   const isOnline = navigator.onLine;
 
-  // When error is set, freeze the form and start the countdown timer
-  useEffect(() => {
-    // Clear any existing timer
-    if (timerRef.current) clearTimeout(timerRef.current);
-
-    if (!error) {
-      setFrozen(false);
-      return;
+  // Single function to show an error and freeze the form for FREEZE_MS
+  const showError = (message, type) => {
+    // Cancel any running timer first
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
     }
 
-    // Freeze immediately when error appears
+    // Set error and freeze together
+    setError(message);
+    setErrorType(type);
     setFrozen(true);
 
-    // Locked accounts: 5 seconds. All other errors: 3 seconds.
-    const delay = errorType === 'locked' ? 5000 : 3000;
-
+    // After FREEZE_MS, clear everything and re-enable form
     timerRef.current = setTimeout(() => {
       setError('');
       setErrorType('');
       setFrozen(false);
-    }, delay);
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
+      timerRef.current = null;
+    }, FREEZE_MS);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!isOnline) {
-      setError('Cannot login while offline. Please connect to the internet.');
-      setErrorType('general');
+      showError('Cannot login while offline. Please connect to the internet.', 'general');
       return;
     }
 
@@ -53,6 +49,7 @@ const Login = ({ onLogin }) => {
 
     try {
       const data = await authAPI.login(email, password, keepLoggedIn);
+      // Success — cancel any pending timer and clear state
       if (timerRef.current) clearTimeout(timerRef.current);
       setError('');
       setErrorType('');
@@ -61,19 +58,8 @@ const Login = ({ onLogin }) => {
     } catch (err) {
       const message = err.response?.data?.error || 'Login failed. Please try again.';
       const status = err.response?.status;
-
-      if (status === 423) {
-        setErrorType('locked');
-      } else if (status === 429) {
-        setErrorType('rate_limited');
-      } else {
-        setErrorType('general');
-      }
-
-      // Set error AFTER errorType so the useEffect reads the correct type
-      // Use setTimeout 0 to ensure errorType state has settled before error triggers the effect
-      setTimeout(() => setError(message), 0);
-
+      const type = status === 423 ? 'locked' : status === 429 ? 'rate_limited' : 'general';
+      showError(message, type);
     } finally {
       setLoading(false);
     }
