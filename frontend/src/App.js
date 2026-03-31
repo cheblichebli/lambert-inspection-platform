@@ -78,7 +78,7 @@ function App() {
       <div className="app">
         {user && <Navigation user={user} onLogout={handleLogout} isOnline={isOnline} />}
 
-        <div className="main-content">
+        <div className={user ? "main-content" : ""}>
           <Routes>
             <Route
               path="/login"
