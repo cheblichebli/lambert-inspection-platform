@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { authAPI } from '../api';
 import { WifiOff, AlertTriangle, Lock } from 'lucide-react';
-
-const ERROR_DISPLAY_MS = 3000; // 3 seconds
 
 const Login = ({ onLogin }) => {
   const [email, setEmail] = useState('');
@@ -12,20 +10,35 @@ const Login = ({ onLogin }) => {
   const [errorType, setErrorType] = useState('');
   const [loading, setLoading] = useState(false);
   const [frozen, setFrozen] = useState(false);
+  const timerRef = useRef(null);
   const isOnline = navigator.onLine;
 
-  // After every error, freeze for 3 seconds then always re-enable
+  // When error is set, freeze the form and start the countdown timer
   useEffect(() => {
-    if (!frozen) return;
+    // Clear any existing timer
+    if (timerRef.current) clearTimeout(timerRef.current);
 
-    const timer = setTimeout(() => {
+    if (!error) {
       setFrozen(false);
+      return;
+    }
+
+    // Freeze immediately when error appears
+    setFrozen(true);
+
+    // Locked accounts: 5 seconds. All other errors: 3 seconds.
+    const delay = errorType === 'locked' ? 5000 : 3000;
+
+    timerRef.current = setTimeout(() => {
       setError('');
       setErrorType('');
-    }, ERROR_DISPLAY_MS);
+      setFrozen(false);
+    }, delay);
 
-    return () => clearTimeout(timer);
-  }, [frozen]);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,7 +46,6 @@ const Login = ({ onLogin }) => {
     if (!isOnline) {
       setError('Cannot login while offline. Please connect to the internet.');
       setErrorType('general');
-      setFrozen(true);
       return;
     }
 
@@ -41,6 +53,7 @@ const Login = ({ onLogin }) => {
 
     try {
       const data = await authAPI.login(email, password, keepLoggedIn);
+      if (timerRef.current) clearTimeout(timerRef.current);
       setError('');
       setErrorType('');
       setFrozen(false);
@@ -57,8 +70,10 @@ const Login = ({ onLogin }) => {
         setErrorType('general');
       }
 
-      setError(message);
-      setFrozen(true); // Always freeze for 3s, always re-enables after
+      // Set error AFTER errorType so the useEffect reads the correct type
+      // Use setTimeout 0 to ensure errorType state has settled before error triggers the effect
+      setTimeout(() => setError(message), 0);
+
     } finally {
       setLoading(false);
     }
@@ -67,7 +82,7 @@ const Login = ({ onLogin }) => {
   const getErrorStyle = () => {
     if (errorType === 'locked') return { backgroundColor: '#fef2f2', borderColor: '#fca5a5', color: '#991b1b' };
     if (errorType === 'rate_limited') return { backgroundColor: '#fff7ed', borderColor: '#fdba74', color: '#92400e' };
-    return {};
+    return { backgroundColor: '#fef2f2', borderColor: '#fca5a5', color: '#991b1b' };
   };
 
   const getErrorIcon = () => {
@@ -127,7 +142,6 @@ const Login = ({ onLogin }) => {
 
           {error && (
             <div
-              className="alert alert-error"
               style={{
                 display: 'flex',
                 alignItems: 'flex-start',
@@ -136,6 +150,7 @@ const Login = ({ onLogin }) => {
                 borderRadius: '6px',
                 border: '1px solid',
                 fontSize: '14px',
+                marginBottom: '16px',
                 ...getErrorStyle()
               }}
             >
