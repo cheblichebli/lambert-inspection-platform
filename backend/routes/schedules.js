@@ -118,6 +118,33 @@ router.post('/:id/start', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/schedules/:id/cancel
+// Resets a schedule back to pending when inspector cancels a started inspection
+router.post('/:id/cancel', authenticateToken, async (req, res) => {
+  const db = req.app.get('db');
+  try {
+    const result = await db.query('SELECT * FROM inspection_schedules WHERE id=$1', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Schedule not found' });
+    const schedule = result.rows[0];
+
+    // Delete the draft inspection that was created
+    if (schedule.linked_inspection_id) {
+      await db.query('DELETE FROM inspections WHERE id=$1 AND status='draft'', [schedule.linked_inspection_id]);
+    }
+
+    // Reset schedule back to pending
+    await db.query(
+      'UPDATE inspection_schedules SET status='pending', linked_inspection_id=NULL, updated_at=CURRENT_TIMESTAMP WHERE id=$1',
+      [req.params.id]
+    );
+
+    res.json({ message: 'Schedule reset to pending' });
+  } catch (err) {
+    console.error('Schedule cancel error:', err);
+    res.status(500).json({ error: 'Failed to cancel inspection' });
+  }
+});
+
 // POST /api/schedules
 router.post('/', authenticateToken, authorizeRoles('admin', 'supervisor'), async (req, res) => {
   const db = req.app.get('db');
