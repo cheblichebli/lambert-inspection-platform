@@ -742,6 +742,96 @@ const InspectionDetail = ({ user }) => {
           </div>
         )}
 
+
+        {/* ── CAPA Trail ───────────────────────────────────────────────────── */}
+        {existingCapas.length > 0 && (
+          <div className="detail-section">
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              📋 Corrective Actions Trail
+              <span style={{ fontSize: '0.8rem', fontWeight: 400, color: '#64748b' }}>
+                ({existingCapas.length} action{existingCapas.length !== 1 ? 's' : ''})
+              </span>
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+              {existingCapas.map((capa, i) => {
+                const isOverdue = capa.due_date && new Date(capa.due_date) < new Date() && capa.status !== 'closed';
+                const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+                const fmtDateTime = (d) => d ? new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+                const priorityColors = { critical: '#dc2626', major: '#d97706', minor: '#64748b' };
+                const priorityBg = { critical: '#fef2f2', major: '#fffbeb', minor: '#f8fafc' };
+                const statusColors = { open: '#3b82f6', in_progress: '#d97706', closed: '#10b981' };
+                return (
+                  <div key={capa.id} style={{
+                    border: `1px solid ${isOverdue ? '#fca5a5' : '#e2e8f0'}`,
+                    borderLeft: `4px solid ${isOverdue ? '#ef4444' : priorityColors[capa.priority] || '#64748b'}`,
+                    borderRadius: '10px',
+                    background: priorityBg[capa.priority] || 'white',
+                    overflow: 'hidden'
+                  }}>
+                    {/* CAPA Header */}
+                    <div style={{ padding: '14px 16px', borderBottom: capa.evidence_note ? '1px solid #e2e8f0' : 'none' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, background: priorityColors[capa.priority] || '#64748b', color: 'white', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {capa.priority}
+                          </span>
+                          <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '0.75rem', fontWeight: 600, background: (statusColors[capa.status] || '#64748b') + '20', color: statusColors[capa.status] || '#64748b', border: `1px solid ${(statusColors[capa.status] || '#64748b')}40`, textTransform: 'capitalize' }}>
+                            {capa.status.replace('_', ' ')}
+                          </span>
+                          {isOverdue && (
+                            <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}>
+                              ⚠ OVERDUE
+                            </span>
+                          )}
+                          {capa.recurrence_count > 0 && (
+                            <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe' }}>
+                              ↻ RECURRING
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p style={{ fontWeight: 700, color: '#1e293b', margin: '0 0 6px', fontSize: '0.95rem' }}>{capa.title}</p>
+                      {capa.description && <p style={{ fontSize: '0.875rem', color: '#4b5563', margin: '0 0 8px' }}>{capa.description}</p>}
+                      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '0.8rem', color: '#64748b' }}>
+                        <span><strong>Assigned to:</strong> {capa.assigned_to_name || '—'}</span>
+                        <span><strong>Issued by:</strong> {capa.created_by_name || '—'}</span>
+                        <span><strong>Due:</strong> <span style={{ color: isOverdue ? '#dc2626' : 'inherit', fontWeight: isOverdue ? 700 : 400 }}>{fmtDate(capa.due_date)}</span></span>
+                        <span><strong>Created:</strong> {fmtDate(capa.created_at)}</span>
+                      </div>
+                    </div>
+                    {/* Evidence Block */}
+                    {capa.evidence_note && (
+                      <div style={{ padding: '12px 16px', background: '#fafffe', borderBottom: capa.status === 'closed' ? '1px solid #e2e8f0' : 'none' }}>
+                        <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0 0 6px' }}>
+                          📎 Evidence Submitted
+                        </p>
+                        <p style={{ fontSize: '0.875rem', color: '#4b5563', margin: 0, lineHeight: 1.6 }}>{capa.evidence_note}</p>
+                        {capa.evidence_photo && (
+                          <img
+                            src={capa.evidence_photo}
+                            alt="Evidence"
+                            style={{ marginTop: '8px', maxWidth: '220px', maxHeight: '160px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'block', cursor: 'pointer' }}
+                            onClick={() => setExpandedPhoto({ photo_data: capa.evidence_photo, caption: 'CAPA Evidence' })}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {/* Closure Block */}
+                    {capa.status === 'closed' && capa.closed_by_name && (
+                      <div style={{ padding: '10px 16px', background: '#f0fdf4', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
+                        <p style={{ fontSize: '0.8rem', color: '#166534', margin: 0 }}>
+                          Verified and closed by <strong>{capa.closed_by_name}</strong> on {fmtDateTime(capa.closed_at)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* ── Flagged Items & CAPA ─────────────────────────────────────────── */}
         {flags.length > 0 && (
           <div className="detail-section">
