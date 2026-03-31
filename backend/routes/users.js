@@ -22,11 +22,27 @@ async function logAudit(pool, userId, action, entityType, entityId, details, req
   } catch (error) { console.error('Audit log error:', error); }
 }
 
-// Get all users
+// Password policy: min 8 chars, 1 uppercase, 1 number, 1 special character
+function validatePasswordPolicy(password) {
+  if (!password || password.length < 8)
+    return 'Password must be at least 8 characters.';
+  if (!/[A-Z]/.test(password))
+    return 'Password must contain at least one uppercase letter.';
+  if (!/[0-9]/.test(password))
+    return 'Password must contain at least one number.';
+  if (!/[^A-Za-z0-9]/.test(password))
+    return 'Password must contain at least one special character.';
+  return null;
+}
+
+// Get all users — includes locked_until and failed_attempts for admin UI
 router.get('/', authenticateToken, authorizeRoles('admin', 'supervisor'), async (req, res) => {
   const pool = req.app.get('db');
   try {
-    const result = await pool.query(`SELECT id, email, full_name, role, is_active, created_at FROM users ORDER BY created_at DESC`);
+    const result = await pool.query(
+      `SELECT id, email, full_name, role, is_active, created_at, locked_until, failed_attempts
+       FROM users ORDER BY created_at DESC`
+    );
     await logAudit(pool, req.user.id, 'users.list_viewed', null, null, { count: result.rows.length }, req);
     res.json(result.rows);
   } catch (error) { console.error('Get users error:', error); res.status(500).json({ error: 'Failed to fetch users' }); }
@@ -37,7 +53,11 @@ router.get('/:id', authenticateToken, authorizeRoles('admin', 'supervisor'), asy
   const { id } = req.params;
   const pool = req.app.get('db');
   try {
-    const result = await pool.query(`SELECT id, email, full_name, role, is_active, created_at, updated_at FROM users WHERE id=$1`, [id]);
+    const result = await pool.query(
+      `SELECT id, email, full_name, role, is_active, created_at, updated_at, locked_until, failed_attempts
+       FROM users WHERE id=$1`,
+      [id]
+    );
     if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     await logAudit(pool, req.user.id, 'users.viewed', 'user', id, null, req);
     res.json(result.rows[0]);
@@ -51,8 +71,9 @@ router.post('/', authenticateToken, authorizeRoles('admin'), async (req, res) =>
   try {
     if (!email || !password || !fullName || !role)
       return res.status(400).json({ error: 'All fields are required' });
-    if (password.length < 6)
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+    const policyError = validatePasswordPolicy(password);
+    if (policyError) return res.status(400).json({ error: policyError });
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await pool.query(
@@ -63,7 +84,6 @@ router.post('/', authenticateToken, authorizeRoles('admin'), async (req, res) =>
 
     await logAudit(pool, req.user.id, 'users.created', 'user', result.rows[0].id, { email, fullName, role }, req);
 
-    // ── Email: welcome email to new user ───────────────────────────────
     sendWelcomeEmail({ toEmail: email, fullName, role, temporaryPassword: password });
 
     res.status(201).json(result.rows[0]);
@@ -73,23 +93,39 @@ router.post('/', authenticateToken, authorizeRoles('admin'), async (req, res) =>
   }
 });
 
-// Update user
+// Update user — handles standard updates and account unlock
 router.put('/:id', authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const { id } = req.params;
-  const { fullName, role, isActive } = req.body;
+  const { fullName, role, isActive, unlockAccount } = req.body;
   const pool = req.app.get('db');
   try {
     if (!fullName || !role || isActive === undefined)
       return res.status(400).json({ error: 'All fields are required' });
-    const oldResult = await pool.query('SELECT full_name, role, is_active FROM users WHERE id=$1', [id]);
+
+    const oldResult = await pool.query('SELECT full_name, role, is_active, locked_until FROM users WHERE id=$1', [id]);
+    if (oldResult.rows.length === 0) return res.status(404).json({ error: 'User not found' });
     const oldData = oldResult.rows[0];
-    const result = await pool.query(
-      `UPDATE users SET full_name=$1, role=$2, is_active=$3, updated_at=CURRENT_TIMESTAMP WHERE id=$4
-       RETURNING id, email, full_name, role, is_active, updated_at`,
-      [fullName, role, isActive, id]
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
-    await logAudit(pool, req.user.id, 'users.updated', 'user', id, { before: oldData, after: { fullName, role, isActive } }, req);
+
+    let result;
+    if (unlockAccount) {
+      // Admin manually unlocking a locked account
+      result = await pool.query(
+        `UPDATE users SET full_name=$1, role=$2, is_active=$3, failed_attempts=0, locked_until=NULL, last_failed_at=NULL, updated_at=CURRENT_TIMESTAMP
+         WHERE id=$4 RETURNING id, email, full_name, role, is_active, locked_until, failed_attempts, updated_at`,
+        [fullName, role, isActive, id]
+      );
+      await logAudit(pool, req.user.id, 'users.account_unlocked', 'user', id,
+        { targetEmail: result.rows[0].email, previousLockUntil: oldData.locked_until }, req);
+    } else {
+      result = await pool.query(
+        `UPDATE users SET full_name=$1, role=$2, is_active=$3, updated_at=CURRENT_TIMESTAMP
+         WHERE id=$4 RETURNING id, email, full_name, role, is_active, locked_until, failed_attempts, updated_at`,
+        [fullName, role, isActive, id]
+      );
+      await logAudit(pool, req.user.id, 'users.updated', 'user', id,
+        { before: oldData, after: { fullName, role, isActive } }, req);
+    }
+
     res.json(result.rows[0]);
   } catch (error) { console.error('Update user error:', error); res.status(500).json({ error: 'Failed to update user' }); }
 });
@@ -111,14 +147,15 @@ router.delete('/:id', authenticateToken, authorizeRoles('admin'), async (req, re
   } catch (error) { console.error('Delete user error:', error); res.status(500).json({ error: 'Failed to delete user' }); }
 });
 
-// Change password
+// Change password (admin-initiated)
 router.put('/:id/password', authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const { id } = req.params;
   const { newPassword } = req.body;
   const pool = req.app.get('db');
   try {
-    if (!newPassword || newPassword.length < 6)
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    const policyError = validatePasswordPolicy(newPassword);
+    if (policyError) return res.status(400).json({ error: policyError });
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     const result = await pool.query(
       `UPDATE users SET password_hash=$1, updated_at=CURRENT_TIMESTAMP WHERE id=$2 RETURNING id, email, full_name`,
