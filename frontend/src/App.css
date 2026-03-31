@@ -461,6 +461,8 @@ body {
   justify-content: center;
   padding: 20px;
   background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  margin-left: 0 !important;
+  width: 100% !important;
 }
 
 .login-card {
