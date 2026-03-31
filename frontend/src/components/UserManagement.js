@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { usersAPI } from '../api';
-import { UserPlus, Edit, Trash2, Key, X, Check, XCircle } from 'lucide-react';
+import { UserPlus, Edit, Trash2, Key, X, Check, Lock, Unlock } from 'lucide-react';
 
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
@@ -64,14 +64,9 @@ const UserManagement = () => {
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
-    
+
     if (newPassword !== confirmPassword) {
       alert('Passwords do not match');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      alert('Password must be at least 6 characters');
       return;
     }
 
@@ -88,7 +83,6 @@ const UserManagement = () => {
     if (!window.confirm(`Are you sure you want to delete user "${user.full_name}"? This action cannot be undone.`)) {
       return;
     }
-
     try {
       await usersAPI.delete(user.id);
       alert('User deleted successfully');
@@ -111,15 +105,43 @@ const UserManagement = () => {
     }
   };
 
+  const handleUnlockUser = async (user) => {
+    if (!window.confirm(`Unlock account for "${user.full_name}"?`)) return;
+    try {
+      await usersAPI.update(user.id, {
+        fullName: user.full_name,
+        role: user.role,
+        isActive: user.is_active,
+        unlockAccount: true
+      });
+      alert(`${user.full_name}'s account has been unlocked.`);
+      loadUsers();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to unlock account');
+    }
+  };
+
+  // Check if a user is currently locked
+  const isLocked = (user) => {
+    return user.locked_until && new Date(user.locked_until) > new Date();
+  };
+
+  // Password policy checker
+  const checkPasswordPolicy = (pwd) => ({
+    length: pwd.length >= 8,
+    uppercase: /[A-Z]/.test(pwd),
+    number: /[0-9]/.test(pwd),
+    special: /[^A-Za-z0-9]/.test(pwd),
+  });
+
+  const passwordPolicyMet = (pwd) => {
+    const checks = checkPasswordPolicy(pwd);
+    return Object.values(checks).every(Boolean);
+  };
+
   const openCreateModal = () => {
     setModalMode('create');
-    setFormData({
-      email: '',
-      password: '',
-      fullName: '',
-      role: 'inspector',
-      isActive: true
-    });
+    setFormData({ email: '', password: '', fullName: '', role: 'inspector', isActive: true });
     setShowModal(true);
   };
 
@@ -148,13 +170,7 @@ const UserManagement = () => {
     setShowModal(false);
     setModalMode('create');
     setSelectedUser(null);
-    setFormData({
-      email: '',
-      password: '',
-      fullName: '',
-      role: 'inspector',
-      isActive: true
-    });
+    setFormData({ email: '', password: '', fullName: '', role: 'inspector', isActive: true });
     setNewPassword('');
     setConfirmPassword('');
   };
@@ -171,7 +187,7 @@ const UserManagement = () => {
       </div>
 
       <div style={{ marginBottom: '20px', color: '#64748b', fontSize: '14px' }}>
-        Total Users: {users.length} | Active: {users.filter(u => u.is_active).length} | Inactive: {users.filter(u => !u.is_active).length}
+        Total Users: {users.length} | Active: {users.filter(u => u.is_active).length} | Inactive: {users.filter(u => !u.is_active).length} | Locked: {users.filter(u => isLocked(u)).length}
       </div>
 
       <table className="data-table">
@@ -187,12 +203,27 @@ const UserManagement = () => {
         </thead>
         <tbody>
           {users.map(user => (
-            <tr key={user.id}>
-              <td>{user.full_name}</td>
+            <tr key={user.id} style={isLocked(user) ? { backgroundColor: '#fef2f2' } : {}}>
+              <td>
+                {user.full_name}
+                {isLocked(user) && (
+                  <span style={{
+                    marginLeft: '8px',
+                    fontSize: '11px',
+                    backgroundColor: '#fee2e2',
+                    color: '#991b1b',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontWeight: 600
+                  }}>
+                    LOCKED
+                  </span>
+                )}
+              </td>
               <td>{user.email}</td>
               <td><span className="badge badge-info">{user.role}</span></td>
               <td>
-                <span 
+                <span
                   className={`badge ${user.is_active ? 'badge-success' : 'badge-error'}`}
                   style={{ cursor: 'pointer' }}
                   onClick={() => handleToggleActive(user)}
@@ -203,21 +234,12 @@ const UserManagement = () => {
               </td>
               <td>{new Date(user.created_at).toLocaleDateString()}</td>
               <td>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   <button
                     onClick={() => openEditModal(user)}
                     className="btn btn-icon"
                     title="Edit user"
-                    style={{
-                      padding: '6px',
-                      backgroundColor: '#3b82f6',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center'
-                    }}
+                    style={{ padding: '6px', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                   >
                     <Edit size={16} />
                   </button>
@@ -226,34 +248,27 @@ const UserManagement = () => {
                     onClick={() => openPasswordModal(user)}
                     className="btn btn-icon"
                     title="Change password"
-                    style={{
-                      padding: '6px',
-                      backgroundColor: '#f59e0b',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center'
-                    }}
+                    style={{ padding: '6px', backgroundColor: '#f59e0b', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                   >
                     <Key size={16} />
                   </button>
+
+                  {isLocked(user) && (
+                    <button
+                      onClick={() => handleUnlockUser(user)}
+                      className="btn btn-icon"
+                      title="Unlock account"
+                      style={{ padding: '6px', backgroundColor: '#8b5cf6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                    >
+                      <Unlock size={16} />
+                    </button>
+                  )}
 
                   <button
                     onClick={() => handleDeleteUser(user)}
                     className="btn btn-icon"
                     title="Delete user"
-                    style={{
-                      padding: '6px',
-                      backgroundColor: '#ef4444',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center'
-                    }}
+                    style={{ padding: '6px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                   >
                     <Trash2 size={16} />
                   </button>
@@ -270,7 +285,7 @@ const UserManagement = () => {
         </div>
       )}
 
-      {/* Modal for Create/Edit/Password */}
+      {/* Modal */}
       {showModal && (
         <div className="modal">
           <div className="modal-content">
@@ -280,16 +295,7 @@ const UserManagement = () => {
                 {modalMode === 'edit' && 'Edit User'}
                 {modalMode === 'password' && 'Change Password'}
               </h2>
-              <button
-                onClick={closeModal}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  color: '#64748b'
-                }}
-              >
+              <button onClick={closeModal} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#64748b' }}>
                 <X size={24} />
               </button>
             </div>
@@ -299,59 +305,36 @@ const UserManagement = () => {
               <form onSubmit={handleCreateUser}>
                 <div className="form-group">
                   <label>Full Name *</label>
-                  <input
-                    type="text"
-                    value={formData.fullName}
-                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    required
-                    className="form-control"
-                    placeholder="John Doe"
-                  />
+                  <input type="text" value={formData.fullName} onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} required className="form-control" placeholder="John Doe" />
                 </div>
-
                 <div className="form-group">
                   <label>Email *</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    required
-                    className="form-control"
-                    placeholder="john@example.com"
-                  />
+                  <input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} required className="form-control" placeholder="john@example.com" />
                 </div>
-
                 <div className="form-group">
                   <label>Password *</label>
-                  <input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    required
-                    minLength={6}
-                    className="form-control"
-                    placeholder="Minimum 6 characters"
-                  />
+                  <input type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} required className="form-control" placeholder="Min 8 chars, uppercase, number, special char" />
+                  {formData.password && (
+                    <div style={{ marginTop: '8px', fontSize: '12px' }}>
+                      {Object.entries(checkPasswordPolicy(formData.password)).map(([key, met]) => (
+                        <div key={key} style={{ color: met ? '#16a34a' : '#dc2626', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {met ? '✓' : '✗'} {key === 'length' ? 'At least 8 characters' : key === 'uppercase' ? 'One uppercase letter' : key === 'number' ? 'One number' : 'One special character'}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-
                 <div className="form-group">
                   <label>Role *</label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="form-control"
-                  >
+                  <select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="form-control">
                     <option value="inspector">Inspector</option>
                     <option value="supervisor">Supervisor</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
-
                 <div className="modal-actions">
-                  <button type="button" onClick={closeModal} className="btn btn-secondary">
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary">
+                  <button type="button" onClick={closeModal} className="btn btn-secondary">Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={!passwordPolicyMet(formData.password)}>
                     <Check size={16} /> Create User
                   </button>
                 </div>
@@ -363,59 +346,30 @@ const UserManagement = () => {
               <form onSubmit={handleUpdateUser}>
                 <div className="form-group">
                   <label>Email</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    disabled
-                    className="form-control"
-                    style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }}
-                  />
+                  <input type="email" value={formData.email} disabled className="form-control" style={{ backgroundColor: '#f1f5f9', cursor: 'not-allowed' }} />
                   <small style={{ color: '#64748b', fontSize: '12px' }}>Email cannot be changed</small>
                 </div>
-
                 <div className="form-group">
                   <label>Full Name *</label>
-                  <input
-                    type="text"
-                    value={formData.fullName}
-                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    required
-                    className="form-control"
-                  />
+                  <input type="text" value={formData.fullName} onChange={(e) => setFormData({ ...formData, fullName: e.target.value })} required className="form-control" />
                 </div>
-
                 <div className="form-group">
                   <label>Role *</label>
-                  <select
-                    value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="form-control"
-                  >
+                  <select value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="form-control">
                     <option value="inspector">Inspector</option>
                     <option value="supervisor">Supervisor</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
-
                 <div className="form-group">
                   <label style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <input
-                      type="checkbox"
-                      checked={formData.isActive}
-                      onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                      style={{ width: 'auto', margin: 0 }}
-                    />
+                    <input type="checkbox" checked={formData.isActive} onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })} style={{ width: 'auto', margin: 0 }} />
                     Account Active
                   </label>
                 </div>
-
                 <div className="modal-actions">
-                  <button type="button" onClick={closeModal} className="btn btn-secondary">
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary">
-                    <Check size={16} /> Update User
-                  </button>
+                  <button type="button" onClick={closeModal} className="btn btn-secondary">Cancel</button>
+                  <button type="submit" className="btn btn-primary"><Check size={16} /> Update User</button>
                 </div>
               </form>
             )}
@@ -423,57 +377,32 @@ const UserManagement = () => {
             {/* Change Password Form */}
             {modalMode === 'password' && (
               <form onSubmit={handleChangePassword}>
-                <div style={{ 
-                  padding: '12px', 
-                  backgroundColor: '#fef3c7', 
-                  borderRadius: '6px',
-                  marginBottom: '20px',
-                  fontSize: '14px',
-                  color: '#92400e'
-                }}>
+                <div style={{ padding: '12px', backgroundColor: '#fef3c7', borderRadius: '6px', marginBottom: '20px', fontSize: '14px', color: '#92400e' }}>
                   Changing password for: <strong>{selectedUser?.full_name}</strong> ({selectedUser?.email})
                 </div>
-
                 <div className="form-group">
                   <label>New Password *</label>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    minLength={6}
-                    className="form-control"
-                    placeholder="Minimum 6 characters"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Confirm New Password *</label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    minLength={6}
-                    className="form-control"
-                    placeholder="Re-enter password"
-                  />
-                  {confirmPassword && newPassword !== confirmPassword && (
-                    <small style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                      Passwords do not match
-                    </small>
+                  <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required className="form-control" placeholder="Min 8 chars, uppercase, number, special char" />
+                  {newPassword && (
+                    <div style={{ marginTop: '8px', fontSize: '12px' }}>
+                      {Object.entries(checkPasswordPolicy(newPassword)).map(([key, met]) => (
+                        <div key={key} style={{ color: met ? '#16a34a' : '#dc2626', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {met ? '✓' : '✗'} {key === 'length' ? 'At least 8 characters' : key === 'uppercase' ? 'One uppercase letter' : key === 'number' ? 'One number' : 'One special character'}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-
+                <div className="form-group">
+                  <label>Confirm New Password *</label>
+                  <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="form-control" placeholder="Re-enter password" />
+                  {confirmPassword && newPassword !== confirmPassword && (
+                    <small style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>Passwords do not match</small>
+                  )}
+                </div>
                 <div className="modal-actions">
-                  <button type="button" onClick={closeModal} className="btn btn-secondary">
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="btn btn-primary"
-                    disabled={newPassword !== confirmPassword || newPassword.length < 6}
-                  >
+                  <button type="button" onClick={closeModal} className="btn btn-secondary">Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={!passwordPolicyMet(newPassword) || newPassword !== confirmPassword}>
                     <Key size={16} /> Change Password
                   </button>
                 </div>
