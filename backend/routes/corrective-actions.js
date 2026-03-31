@@ -33,24 +33,48 @@ router.get('/', authenticateToken, async (req, res) => {
         ca.due_date ASC NULLS LAST, ca.created_at DESC
     `, vals);
     res.json(result.rows);
-  } catch (err) { console.error('CAPA GET error:', err); res.status(500).json({ error: 'Failed to fetch corrective actions' }); }
+  } catch (err) {
+    console.error('CAPA GET error:', err);
+    res.status(500).json({ error: 'Failed to fetch corrective actions' });
+  }
 });
 
 // GET /api/capa/stats
+// Stats are scoped by role — inspectors only see their own counts
 router.get('/stats', authenticateToken, async (req, res) => {
   const db = req.app.get('db');
+  const user = req.user;
   try {
-    const result = await db.query(`
-      SELECT
-        COUNT(*) FILTER (WHERE status='open') AS open,
-        COUNT(*) FILTER (WHERE status='in_progress') AS in_progress,
-        COUNT(*) FILTER (WHERE status='closed') AS closed,
-        COUNT(*) FILTER (WHERE status!='closed' AND due_date < NOW()) AS overdue,
-        COUNT(*) FILTER (WHERE recurrence_count > 0) AS recurring
-      FROM corrective_actions
-    `);
+    let query, vals = [];
+    if (user.role === 'inspector') {
+      query = `
+        SELECT
+          COUNT(*) FILTER (WHERE status='open') AS open,
+          COUNT(*) FILTER (WHERE status='in_progress') AS in_progress,
+          COUNT(*) FILTER (WHERE status='closed') AS closed,
+          COUNT(*) FILTER (WHERE status != 'closed' AND due_date < NOW()) AS overdue,
+          COUNT(*) FILTER (WHERE recurrence_count > 0) AS recurring
+        FROM corrective_actions
+        WHERE assigned_to = $1
+      `;
+      vals = [user.id];
+    } else {
+      query = `
+        SELECT
+          COUNT(*) FILTER (WHERE status='open') AS open,
+          COUNT(*) FILTER (WHERE status='in_progress') AS in_progress,
+          COUNT(*) FILTER (WHERE status='closed') AS closed,
+          COUNT(*) FILTER (WHERE status != 'closed' AND due_date < NOW()) AS overdue,
+          COUNT(*) FILTER (WHERE recurrence_count > 0) AS recurring
+        FROM corrective_actions
+      `;
+    }
+    const result = await db.query(query, vals);
     res.json(result.rows[0]);
-  } catch (err) { console.error('CAPA stats error:', err); res.status(500).json({ error: 'Failed to fetch stats' }); }
+  } catch (err) {
+    console.error('CAPA stats error:', err);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
 });
 
 // POST /api/capa
@@ -76,7 +100,6 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'supervisor'), async
 
     const capa = result.rows[0];
 
-    // ── Email: notify assignee ────────────────────────────────────────
     if (assigned_to) {
       const assigneeRow = await db.query('SELECT email, full_name FROM users WHERE id=$1', [assigned_to]);
       const creatorRow = await db.query('SELECT full_name FROM users WHERE id=$1', [req.user.id]);
@@ -96,7 +119,10 @@ router.post('/', authenticateToken, authorizeRoles('admin', 'supervisor'), async
     }
 
     res.status(201).json({ ...capa, recurrence_detected: recurrence > 0 });
-  } catch (err) { console.error('CAPA POST error:', err); res.status(500).json({ error: 'Failed to create corrective action' }); }
+  } catch (err) {
+    console.error('CAPA POST error:', err);
+    res.status(500).json({ error: 'Failed to create corrective action' });
+  }
 });
 
 // PUT /api/capa/:id
@@ -138,7 +164,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
       `UPDATE corrective_actions SET ${updates.join(',')} WHERE id=$${i} RETURNING *`, vals
     );
 
-    // ── Email: notify supervisor when CAPA is closed ──────────────────
     if (status === 'closed' && ca.created_by_email) {
       const closerRow = await db.query('SELECT full_name FROM users WHERE id=$1', [user.id]);
       sendCapaClosed({
@@ -152,7 +177,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     res.json(result.rows[0]);
-  } catch (err) { console.error('CAPA PUT error:', err); res.status(500).json({ error: 'Failed to update corrective action' }); }
+  } catch (err) {
+    console.error('CAPA PUT error:', err);
+    res.status(500).json({ error: 'Failed to update corrective action' });
+  }
 });
 
 // DELETE /api/capa/:id
@@ -161,7 +189,10 @@ router.delete('/:id', authenticateToken, authorizeRoles('admin'), async (req, re
   try {
     await db.query('DELETE FROM corrective_actions WHERE id=$1', [req.params.id]);
     res.json({ message: 'Deleted' });
-  } catch (err) { console.error('CAPA DELETE error:', err); res.status(500).json({ error: 'Failed to delete corrective action' }); }
+  } catch (err) {
+    console.error('CAPA DELETE error:', err);
+    res.status(500).json({ error: 'Failed to delete corrective action' });
+  }
 });
 
 module.exports = router;
