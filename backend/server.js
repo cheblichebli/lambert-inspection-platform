@@ -31,6 +31,7 @@ const loginLimiter = rateLimit({
   message: { error: 'Too many login attempts from this device. Please try again in 5 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { xForwardedForHeader: false },
 });
 
 // Make pool available to routes
