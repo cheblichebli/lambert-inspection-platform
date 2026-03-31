@@ -82,8 +82,8 @@ router.post('/:id/start', authenticateToken, async (req, res) => {
     // Create the pre-populated inspection as a draft
     const inspResult = await db.query(`
       INSERT INTO inspections
-        (template_id, inspector_id, location, equipment_id, notes, status)
-      VALUES ($1, $2, $3, $4, $5, 'draft')
+        (template_id, inspector_id, location, equipment_id, notes, status, data)
+      VALUES ($1, $2, $3, $4, $5, 'draft', '{}')
       RETURNING id`,
       [
         schedule.form_template_id || null,
