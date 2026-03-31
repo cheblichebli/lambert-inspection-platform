@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { authAPI } from '../api';
 import { WifiOff, AlertTriangle, Lock } from 'lucide-react';
 
-const FREEZE_MS = 5000; // 5 seconds for all error types
+const FREEZE_MS = 5000;
 
 const Login = ({ onLogin }) => {
   const [email, setEmail] = useState('');
@@ -15,20 +15,14 @@ const Login = ({ onLogin }) => {
   const timerRef = useRef(null);
   const isOnline = navigator.onLine;
 
-  // Single function to show an error and freeze the form for FREEZE_MS
   const showError = (message, type) => {
-    // Cancel any running timer first
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-
-    // Set error and freeze together
     setError(message);
     setErrorType(type);
     setFrozen(true);
-
-    // After FREEZE_MS, clear everything and re-enable form
     timerRef.current = setTimeout(() => {
       setError('');
       setErrorType('');
@@ -37,8 +31,8 @@ const Login = ({ onLogin }) => {
     }, FREEZE_MS);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleLogin = async () => {
+    if (!email || !password) return;
 
     if (!isOnline) {
       showError('Cannot login while offline. Please connect to the internet.', 'general');
@@ -49,7 +43,6 @@ const Login = ({ onLogin }) => {
 
     try {
       const data = await authAPI.login(email, password, keepLoggedIn);
-      // Success — cancel any pending timer and clear state
       if (timerRef.current) clearTimeout(timerRef.current);
       setError('');
       setErrorType('');
@@ -63,6 +56,10 @@ const Login = ({ onLogin }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !isDisabled) handleLogin();
   };
 
   const getErrorStyle = () => {
@@ -97,7 +94,7 @@ const Login = ({ onLogin }) => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="login-form">
+        <div className="login-form">
           <div className="form-group">
             <label htmlFor="email">Email</label>
             <input
@@ -105,8 +102,8 @@ const Login = ({ onLogin }) => {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="your.email@lambertelectromec.com"
-              required
               disabled={isDisabled}
               style={{ width: '100%', boxSizing: 'border-box' }}
             />
@@ -119,8 +116,8 @@ const Login = ({ onLogin }) => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={handleKeyDown}
               placeholder="Enter your password"
-              required
               disabled={isDisabled}
               style={{ width: '100%', boxSizing: 'border-box' }}
             />
@@ -163,13 +160,13 @@ const Login = ({ onLogin }) => {
           </div>
 
           <button
-            type="submit"
+            onClick={handleLogin}
             className="btn btn-primary btn-block"
             disabled={isDisabled}
           >
             {loading ? 'Logging in...' : frozen ? 'Please wait...' : 'Login'}
           </button>
-        </form>
+        </div>
       </div>
     </div>
   );
