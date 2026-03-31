@@ -24,13 +24,20 @@ api.interceptors.request.use(
 );
 
 // Response interceptor for error handling
+// Only redirect to /login on 401 if a token exists — i.e. an active session expired.
+// Do NOT redirect during login attempts (no token present yet).
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      const token = localStorage.getItem('token');
+      if (token) {
+        // Logged-in session expired — clear and redirect
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+      // No token = login attempt failure — let the error propagate normally
     }
     return Promise.reject(error);
   }
