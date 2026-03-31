@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { authAPI } from '../api';
 import { WifiOff, AlertTriangle, Lock } from 'lucide-react';
 
@@ -8,11 +8,18 @@ const Login = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
-  const [error, setError] = useState('');
-  const [errorType, setErrorType] = useState('');
   const [loading, setLoading] = useState(false);
-  const [frozen, setFrozen] = useState(false);
+
+  // Use a single render counter to force re-renders without state resets
+  const [, forceUpdate] = useState(0);
+  const rerender = useCallback(() => forceUpdate(n => n + 1), []);
+
+  // Error and frozen stored in refs — immune to re-renders caused by loading changes
+  const errorRef = useRef('');
+  const errorTypeRef = useRef('');
+  const frozenRef = useRef(false);
   const timerRef = useRef(null);
+
   const isOnline = navigator.onLine;
 
   const showError = (message, type) => {
@@ -20,14 +27,18 @@ const Login = ({ onLogin }) => {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    setError(message);
-    setErrorType(type);
-    setFrozen(true);
+
+    errorRef.current = message;
+    errorTypeRef.current = type;
+    frozenRef.current = true;
+    rerender();
+
     timerRef.current = setTimeout(() => {
-      setError('');
-      setErrorType('');
-      setFrozen(false);
+      errorRef.current = '';
+      errorTypeRef.current = '';
+      frozenRef.current = false;
       timerRef.current = null;
+      rerender();
     }, FREEZE_MS);
   };
 
@@ -44,9 +55,9 @@ const Login = ({ onLogin }) => {
     try {
       const data = await authAPI.login(email, password, keepLoggedIn);
       if (timerRef.current) clearTimeout(timerRef.current);
-      setError('');
-      setErrorType('');
-      setFrozen(false);
+      errorRef.current = '';
+      errorTypeRef.current = '';
+      frozenRef.current = false;
       onLogin(data.user);
     } catch (err) {
       const message = err.response?.data?.error || 'Login failed. Please try again.';
@@ -62,6 +73,11 @@ const Login = ({ onLogin }) => {
     if (e.key === 'Enter' && !isDisabled) handleLogin();
   };
 
+  const error = errorRef.current;
+  const errorType = errorTypeRef.current;
+  const frozen = frozenRef.current;
+  const isDisabled = loading || frozen || !isOnline;
+
   const getErrorStyle = () => {
     if (errorType === 'locked') return { backgroundColor: '#fef2f2', borderColor: '#fca5a5', color: '#991b1b' };
     if (errorType === 'rate_limited') return { backgroundColor: '#fff7ed', borderColor: '#fdba74', color: '#92400e' };
@@ -72,8 +88,6 @@ const Login = ({ onLogin }) => {
     if (errorType === 'locked') return <Lock size={18} style={{ flexShrink: 0 }} />;
     return <AlertTriangle size={18} style={{ flexShrink: 0 }} />;
   };
-
-  const isDisabled = loading || frozen || !isOnline;
 
   return (
     <div className="login-container">
