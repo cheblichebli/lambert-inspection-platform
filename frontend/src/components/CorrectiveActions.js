@@ -6,7 +6,7 @@ import { Camera, Upload, X } from 'lucide-react';
 const CorrectiveActions = ({ user }) => {
   const navigate = useNavigate();
 
-  const [allActions, setAllActions] = useState([]); // full unfiltered list
+  const [allActions, setAllActions] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('open');
@@ -20,7 +20,6 @@ const CorrectiveActions = ({ user }) => {
 
   const isSupervisor = user && ['admin', 'supervisor'].includes(user.role);
 
-  // ── Load ALL actions once — filtering is done client-side ────────────────
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -40,36 +39,35 @@ const CorrectiveActions = ({ user }) => {
     }
   }, [loadData]);
 
-  // ── Client-side derived stats & filtered list ─────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────────
   const now = new Date();
+  const isOverdue = (a) => a.due_date && new Date(a.due_date) < now && a.status !== 'closed';
 
-  const isOverdue = (a) =>
-    a.due_date && new Date(a.due_date) < now && a.status !== 'closed';
-
+  // ── Client-side counts ────────────────────────────────────────────────────
   const counts = {
-    open:        allActions.filter(a => a.status === 'open' && !isOverdue(a)).length,
-    overdue:     allActions.filter(a => isOverdue(a)).length,
+    open:        allActions.filter(a => a.status === 'open').length,
     in_progress: allActions.filter(a => a.status === 'in_progress').length,
+    overdue:     allActions.filter(a => isOverdue(a)).length,
     closed:      allActions.filter(a => a.status === 'closed').length,
-    recurring:   allActions.filter(a => a.recurrence_count > 0).length,
     all:         allActions.length,
   };
 
+  // ── Tab filtering ─────────────────────────────────────────────────────────
   const filteredActions = allActions.filter(a => {
-    if (activeTab === 'open')    return a.status === 'open' && !isOverdue(a);
-    if (activeTab === 'overdue') return isOverdue(a);
-    if (activeTab === 'closed')  return a.status === 'closed';
+    if (activeTab === 'open')        return a.status === 'open';
+    if (activeTab === 'in_progress') return a.status === 'in_progress';
+    if (activeTab === 'closed')      return a.status === 'closed';
     return true; // 'all'
   });
 
   const tabs = [
-    { key: 'open',    label: 'Open',    count: counts.open },
-    { key: 'overdue', label: 'Overdue', count: counts.overdue },
-    { key: 'closed',  label: 'Closed',  count: counts.closed },
-    { key: 'all',     label: 'All',     count: counts.all },
+    { key: 'open',        label: 'Open',        count: counts.open },
+    { key: 'in_progress', label: 'In Progress',  count: counts.in_progress },
+    { key: 'closed',      label: 'Closed',       count: counts.closed },
+    { key: 'all',         label: 'All',          count: counts.all },
   ];
 
-  // ── Evidence photo handler ───────────────────────────────────────────────
+  // ── Evidence photo handler ────────────────────────────────────────────────
   const handleEvidencePhoto = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -79,7 +77,7 @@ const CorrectiveActions = ({ user }) => {
     e.target.value = '';
   };
 
-  // ── Submit evidence ──────────────────────────────────────────────────────
+  // ── Submit evidence ───────────────────────────────────────────────────────
   const handleSubmitEvidence = async () => {
     if (!evidenceForm.note && !evidenceForm.photo) {
       alert('Please add a note or photo as evidence before submitting.');
@@ -102,7 +100,7 @@ const CorrectiveActions = ({ user }) => {
     }
   };
 
-  // ── Close action ─────────────────────────────────────────────────────────
+  // ── Close action ──────────────────────────────────────────────────────────
   const handleCloseAction = async (action) => {
     if (!window.confirm(`Close this corrective action?\n\n"${action.title}"\n\nThis confirms the fix has been verified.`)) return;
     setClosureTarget(action.id);
@@ -118,10 +116,11 @@ const CorrectiveActions = ({ user }) => {
     }
   };
 
-  // ── Helpers ──────────────────────────────────────────────────────────────
   const priorityColors = { critical: '#dc2626', major: '#d97706', minor: '#64748b' };
   const priorityBg    = { critical: '#fef2f2', major: '#fffbeb', minor: '#f8fafc' };
   const statusColors  = { open: '#3b82f6', in_progress: '#d97706', closed: '#10b981' };
+  const statusLabels  = { open: 'Open', in_progress: 'In Progress', closed: 'Closed' };
+
   const fmtDate = (d) =>
     d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
@@ -136,13 +135,12 @@ const CorrectiveActions = ({ user }) => {
         </p>
       </div>
 
-      {/* Stats Bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+      {/* ── Stats Bar ────────────────────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '24px' }}>
         {[
           { label: 'Open',        value: counts.open,        color: '#3b82f6', bg: '#eff6ff' },
           { label: 'In Progress', value: counts.in_progress, color: '#d97706', bg: '#fffbeb' },
           { label: 'Overdue',     value: counts.overdue,     color: '#dc2626', bg: '#fef2f2' },
-          { label: 'Recurring',   value: counts.recurring,   color: '#7c3aed', bg: '#f5f3ff' },
           { label: 'Closed',      value: counts.closed,      color: '#10b981', bg: '#f0fdf4' },
         ].map(s => (
           <div key={s.label} style={{
@@ -155,7 +153,7 @@ const CorrectiveActions = ({ user }) => {
         ))}
       </div>
 
-      {/* Tabs */}
+      {/* ── Tabs ─────────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: '4px', borderBottom: '2px solid #e2e8f0', marginBottom: '20px' }}>
         {tabs.map(tab => (
           <button
@@ -184,7 +182,7 @@ const CorrectiveActions = ({ user }) => {
         ))}
       </div>
 
-      {/* Action Cards */}
+      {/* ── Action Cards ──────────────────────────────────────────────────────── */}
       {loading ? (
         <div className="loading-container"><div className="spinner"></div></div>
       ) : filteredActions.length === 0 ? (
@@ -215,68 +213,111 @@ const CorrectiveActions = ({ user }) => {
                 {/* Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: '10px' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                      <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, background: priorityColors[action.priority] || '#64748b', color: 'white', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                      {/* Priority badge */}
+                      <span style={{
+                        padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
+                        background: priorityColors[action.priority] || '#64748b', color: 'white',
+                        textTransform: 'uppercase', letterSpacing: '0.05em'
+                      }}>
                         {action.priority}
                       </span>
-                      {overdue && (
-                        <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}>OVERDUE</span>
-                      )}
-                      {action.recurrence_count > 0 && (
-                        <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe' }}>↻ RECURRING</span>
-                      )}
-                      <span style={{ padding: '2px 8px', borderRadius: '10px', fontSize: '0.75rem', fontWeight: 600, background: (statusColors[action.status] || '#64748b') + '20', color: statusColors[action.status] || '#64748b', border: `1px solid ${(statusColors[action.status] || '#64748b')}40`, textTransform: 'capitalize' }}>
-                        {action.status.replace('_', ' ')}
+
+                      {/* Status badge */}
+                      <span style={{
+                        padding: '2px 8px', borderRadius: '10px', fontSize: '0.75rem', fontWeight: 600,
+                        background: (statusColors[action.status] || '#64748b') + '20',
+                        color: statusColors[action.status] || '#64748b',
+                        border: `1px solid ${(statusColors[action.status] || '#64748b')}40`
+                      }}>
+                        {statusLabels[action.status] || action.status}
                       </span>
+
+                      {/* Overdue indicator badge */}
+                      {overdue && (
+                        <span style={{
+                          padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
+                          background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5'
+                        }}>
+                          ⚠ OVERDUE
+                        </span>
+                      )}
+
+                      {/* Recurring indicator badge */}
+                      {action.recurrence_count > 0 && (
+                        <span style={{
+                          padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
+                          background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe'
+                        }}>
+                          ↻ RECURRING
+                        </span>
+                      )}
                     </div>
+
                     <p style={{ fontWeight: 700, color: '#1e293b', margin: 0, fontSize: '0.95rem' }}>{action.title}</p>
                     {action.description && (
                       <p style={{ fontSize: '0.875rem', color: '#4b5563', margin: '4px 0 0' }}>{action.description}</p>
                     )}
                   </div>
 
+                  {/* Action buttons */}
                   <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                     {canSubmitEvidence && (
-                      <button onClick={() => { setEvidenceTarget(action); setEvidenceForm({ note: '', photo: '' }); }}
-                        style={{ padding: '6px 14px', background: '#d97706', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                      <button
+                        onClick={() => { setEvidenceTarget(action); setEvidenceForm({ note: '', photo: '' }); }}
+                        style={{ padding: '6px 14px', background: '#d97706', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                      >
                         Submit Evidence
                       </button>
                     )}
                     {canClose && (
-                      <button onClick={() => handleCloseAction(action)} disabled={closureSubmitting && closureTarget === action.id}
-                        style={{ padding: '6px 14px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
-                        {closureSubmitting && closureTarget === action.id ? 'Closing...' : '✓ Close Action'}
+                      <button
+                        onClick={() => handleCloseAction(action)}
+                        disabled={closureSubmitting && closureTarget === action.id}
+                        style={{ padding: '6px 14px', background: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                      >
+                        {closureSubmitting && closureTarget === action.id ? 'Closing...' : '✓ Verify & Close'}
                       </button>
                     )}
                   </div>
                 </div>
 
-                {/* Meta */}
+                {/* Meta row */}
                 <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '0.8rem', color: '#64748b' }}>
                   <span><strong>Assigned to:</strong> {action.assigned_to_name || '—'}</span>
                   <span>
                     <strong>Due:</strong>{' '}
-                    <span style={{ color: overdue ? '#dc2626' : 'inherit', fontWeight: overdue ? 700 : 400 }}>{fmtDate(action.due_date)}</span>
+                    <span style={{ color: overdue ? '#dc2626' : 'inherit', fontWeight: overdue ? 700 : 400 }}>
+                      {fmtDate(action.due_date)}
+                    </span>
                   </span>
                   {action.equipment_id && <span><strong>Equipment:</strong> {action.equipment_id}</span>}
                   {action.location && <span><strong>Location:</strong> {action.location}</span>}
                   <span>
                     <strong>Inspection:</strong>{' '}
-                    <button onClick={() => navigate(`/inspections/${action.inspection_id}`)}
-                      style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', padding: 0, fontSize: '0.8rem', textDecoration: 'underline' }}>
+                    <button
+                      onClick={() => navigate(`/inspections/${action.inspection_id}`)}
+                      style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', padding: 0, fontSize: '0.8rem', textDecoration: 'underline' }}
+                    >
                       INS-{String(action.inspection_id).padStart(5, '0')}
                     </button>
                   </span>
                   <span><strong>Created:</strong> {fmtDate(action.created_at)}</span>
                 </div>
 
-                {/* Evidence */}
+                {/* Evidence block */}
                 {action.evidence_note && (
                   <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
-                    <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 6px' }}>Evidence Submitted</p>
+                    <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 6px' }}>
+                      Evidence Submitted
+                    </p>
                     <p style={{ fontSize: '0.875rem', color: '#4b5563', margin: 0 }}>{action.evidence_note}</p>
                     {action.evidence_photo && (
-                      <img src={action.evidence_photo} alt="Evidence" style={{ marginTop: '8px', maxWidth: '200px', maxHeight: '150px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'block' }} />
+                      <img
+                        src={action.evidence_photo}
+                        alt="Evidence"
+                        style={{ marginTop: '8px', maxWidth: '200px', maxHeight: '150px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #e2e8f0', display: 'block' }}
+                      />
                     )}
                   </div>
                 )}
@@ -293,10 +334,11 @@ const CorrectiveActions = ({ user }) => {
         </div>
       )}
 
-      {/* Evidence Modal */}
+      {/* ── Evidence Submission Modal ─────────────────────────────────────────── */}
       {evidenceTarget && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '20px' }}>
           <div style={{ background: 'white', borderRadius: '12px', padding: '28px', width: '100%', maxWidth: '480px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
               <div>
                 <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', color: '#1e293b' }}>Submit Evidence</h3>
@@ -310,7 +352,13 @@ const CorrectiveActions = ({ user }) => {
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   Description of fix <span style={{ color: '#ef4444' }}>*</span>
                 </label>
-                <textarea value={evidenceForm.note} onChange={e => setEvidenceForm(f => ({ ...f, note: e.target.value }))} placeholder="Describe what corrective action was taken..." className="form-control" rows={3} />
+                <textarea
+                  value={evidenceForm.note}
+                  onChange={e => setEvidenceForm(f => ({ ...f, note: e.target.value }))}
+                  placeholder="Describe what corrective action was taken..."
+                  className="form-control"
+                  rows={3}
+                />
               </div>
 
               <div>
@@ -320,7 +368,10 @@ const CorrectiveActions = ({ user }) => {
                 {evidenceForm.photo ? (
                   <div style={{ position: 'relative', display: 'inline-block' }}>
                     <img src={evidenceForm.photo} alt="Evidence" style={{ maxWidth: '100%', maxHeight: '180px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'block' }} />
-                    <button onClick={() => setEvidenceForm(f => ({ ...f, photo: '' }))} style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#ef4444', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer', color: 'white', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <button
+                      onClick={() => setEvidenceForm(f => ({ ...f, photo: '' }))}
+                      style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#ef4444', border: 'none', borderRadius: '50%', width: '24px', height: '24px', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
                       <X size={12} />
                     </button>
                   </div>
@@ -341,7 +392,12 @@ const CorrectiveActions = ({ user }) => {
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
               <button onClick={() => setEvidenceTarget(null)} className="btn btn-secondary" style={{ flex: 1 }}>Cancel</button>
-              <button onClick={handleSubmitEvidence} disabled={evidenceSubmitting || (!evidenceForm.note && !evidenceForm.photo)} className="btn btn-primary" style={{ flex: 2, background: '#d97706', borderColor: '#d97706' }}>
+              <button
+                onClick={handleSubmitEvidence}
+                disabled={evidenceSubmitting || (!evidenceForm.note && !evidenceForm.photo)}
+                className="btn btn-primary"
+                style={{ flex: 2, background: '#d97706', borderColor: '#d97706' }}
+              >
                 {evidenceSubmitting ? 'Submitting...' : 'Submit Evidence'}
               </button>
             </div>
