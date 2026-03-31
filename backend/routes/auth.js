@@ -7,7 +7,6 @@ const { sendPasswordReset } = require('../utils/email');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
 const MAX_FAILED_ATTEMPTS = 5;
 
 // Password policy: min 8 chars, 1 uppercase, 1 number, 1 special character
@@ -51,11 +50,9 @@ router.post('/login', async (req, res) => {
   const ua = req.headers['user-agent'] || '';
 
   try {
-    // Fetch user (active or not — we need to check lockout regardless)
     const result = await pool.query('SELECT * FROM users WHERE email=$1', [email]);
 
     if (result.rows.length === 0) {
-      // Log failed attempt for unknown email
       await logAudit(pool, {
         userId: null, userEmail: email, userName: 'Unknown',
         action: 'auth.login_failed', entityType: 'user', entityId: null,
@@ -67,9 +64,8 @@ router.post('/login', async (req, res) => {
 
     const user = result.rows[0];
 
-    // Check if account is locked
+    // Check if account is locked (locked_until = 9999 = indefinite)
     if (user.locked_until && new Date(user.locked_until) > new Date()) {
-      const minutesLeft = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);
       await logAudit(pool, {
         userId: user.id, userEmail: user.email, userName: user.full_name,
         action: 'auth.login_blocked', entityType: 'user', entityId: user.id,
@@ -77,7 +73,7 @@ router.post('/login', async (req, res) => {
         req
       });
       return res.status(423).json({
-        error: `Account is locked due to too many failed attempts. Try again in ${minutesLeft} minute${minutesLeft !== 1 ? 's' : ''}.`
+        error: `Your account has been locked due to too many failed login attempts. Please contact your system administrator to regain access.`
       });
     }
 
@@ -90,13 +86,13 @@ router.post('/login', async (req, res) => {
     const valid = await bcrypt.compare(password, user.password_hash);
 
     if (!valid) {
-      // Increment failed attempts
       const newAttempts = (user.failed_attempts || 0) + 1;
-      let lockUntil = null;
+      const attemptsLeft = MAX_FAILED_ATTEMPTS - newAttempts;
 
-      if (newAttempts >= MAX_FAILED_ATTEMPTS) {
-        lockUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
-      }
+      // Lock indefinitely on reaching max attempts
+      const lockUntil = newAttempts >= MAX_FAILED_ATTEMPTS
+        ? new Date('9999-12-31T23:59:59Z')
+        : null;
 
       await pool.query(
         'UPDATE users SET failed_attempts=$1, last_failed_at=NOW(), locked_until=$2 WHERE id=$3',
@@ -112,13 +108,12 @@ router.post('/login', async (req, res) => {
 
       if (lockUntil) {
         return res.status(423).json({
-          error: `Too many failed attempts. Account locked for 30 minutes.`
+          error: `Your account has been locked due to too many failed login attempts. Please contact your system administrator to regain access.`
         });
       }
 
-      const attemptsLeft = MAX_FAILED_ATTEMPTS - newAttempts;
       return res.status(401).json({
-        error: `Invalid credentials. ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before lockout.`
+        error: `Incorrect password — failed attempt ${newAttempts} of ${MAX_FAILED_ATTEMPTS}. ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before your account is locked.`
       });
     }
 
@@ -179,7 +174,7 @@ router.post('/logout', async (req, res) => {
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
     console.error('Logout error:', error);
-    res.json({ message: 'Logged out' }); // Always succeed from client perspective
+    res.json({ message: 'Logged out' });
   }
 });
 
@@ -195,7 +190,6 @@ router.post('/change-password', async (req, res) => {
     const valid = await bcrypt.compare(currentPassword, user.password_hash);
     if (!valid) return res.status(401).json({ error: 'Current password is incorrect' });
 
-    // Enforce password policy
     const policyError = validatePasswordPolicy(newPassword);
     if (policyError) return res.status(400).json({ error: policyError });
 
@@ -261,7 +255,6 @@ router.post('/reset-password', async (req, res) => {
     if (!token || !newPassword)
       return res.status(400).json({ error: 'Token and new password are required' });
 
-    // Enforce password policy
     const policyError = validatePasswordPolicy(newPassword);
     if (policyError) return res.status(400).json({ error: policyError });
 
