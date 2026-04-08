@@ -3,50 +3,37 @@ import { db } from './db';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
-// Create axios instance
 const api = axios.create({
   baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });
 
-// Request interceptor to add token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Response interceptor for error handling
-// Only redirect to /login on 401 if a token exists — i.e. an active session expired.
-// Do NOT redirect during login attempts (no token present yet).
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       const token = localStorage.getItem('token');
       if (token) {
-        // Logged-in session expired — clear and redirect
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.location.href = '/login';
       }
-      // No token = login attempt failure — let the error propagate normally
     }
     return Promise.reject(error);
   }
 );
 
-// Check if online
 export const isOnline = () => navigator.onLine;
 
-// Auth API
 export const authAPI = {
   login: async (email, password) => {
     const response = await api.post('/auth/login', { email, password });
@@ -56,28 +43,20 @@ export const authAPI = {
     }
     return response.data;
   },
-
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
   },
-
   getCurrentUser: () => {
     const userStr = localStorage.getItem('user');
     return userStr ? JSON.parse(userStr) : null;
   },
-
   changePassword: async (email, currentPassword, newPassword) => {
-    const response = await api.post('/auth/change-password', {
-      email,
-      currentPassword,
-      newPassword,
-    });
+    const response = await api.post('/auth/change-password', { email, currentPassword, newPassword });
     return response.data;
   },
 };
 
-// Forms API
 export const formsAPI = {
   getAll: async (category = null, isActive = true) => {
     if (!isOnline()) {
@@ -92,30 +71,16 @@ export const formsAPI = {
     const response = await api.get(`/forms?${params.toString()}`);
     return response.data;
   },
-
   getById: async (id) => {
     if (!isOnline()) return await db.forms.get({ syncId: id });
     const response = await api.get(`/forms/${id}`);
     return response.data;
   },
-
-  create: async (formData) => {
-    const response = await api.post('/forms', formData);
-    return response.data;
-  },
-
-  update: async (id, formData) => {
-    const response = await api.put(`/forms/${id}`, formData);
-    return response.data;
-  },
-
-  delete: async (id) => {
-    const response = await api.delete(`/forms/${id}`);
-    return response.data;
-  },
+  create: async (formData) => { const response = await api.post('/forms', formData); return response.data; },
+  update: async (id, formData) => { const response = await api.put(`/forms/${id}`, formData); return response.data; },
+  delete: async (id) => { const response = await api.delete(`/forms/${id}`); return response.data; },
 };
 
-// Inspections API
 export const inspectionsAPI = {
   getAll: async (filters = {}) => {
     if (!isOnline()) {
@@ -128,28 +93,23 @@ export const inspectionsAPI = {
     const response = await api.get(`/inspections?${params.toString()}`);
     return response.data;
   },
-
   getById: async (id) => {
     if (!isOnline()) {
       const inspection = await db.inspections.get(id);
       if (inspection) {
         inspection.photos = await db.photos
-          .where('inspectionSyncId')
-          .equals(inspection.syncId)
-          .sortBy('sequenceOrder');
+          .where('inspectionSyncId').equals(inspection.syncId).sortBy('sequenceOrder');
       }
       return inspection;
     }
     const response = await api.get(`/inspections/${id}`);
     return response.data;
   },
-
   create: async (inspectionData) => {
     if (!isOnline()) return await db.createOfflineInspection(inspectionData);
     const response = await api.post('/inspections', inspectionData);
     return response.data;
   },
-
   update: async (id, inspectionData) => {
     if (!isOnline()) {
       await db.inspections.update(id, { ...inspectionData, updatedAt: new Date().toISOString(), synced: false });
@@ -158,28 +118,18 @@ export const inspectionsAPI = {
     const response = await api.put(`/inspections/${id}`, inspectionData);
     return response.data;
   },
-
   review: async (id, status, comments) => {
     const response = await api.post(`/inspections/${id}/review`, { status, comments });
     return response.data;
   },
-
   delete: async (id) => {
-    if (!isOnline()) {
-      await db.inspections.delete(id);
-      return { message: 'Deleted locally' };
-    }
+    if (!isOnline()) { await db.inspections.delete(id); return { message: 'Deleted locally' }; }
     const response = await api.delete(`/inspections/${id}`);
     return response.data;
   },
-
-  getStats: async () => {
-    const response = await api.get('/inspections/stats/summary');
-    return response.data;
-  },
+  getStats: async () => { const response = await api.get('/inspections/stats/summary'); return response.data; },
 };
 
-// Sync API
 export const syncAPI = {
   syncInspections: async () => {
     if (!isOnline()) throw new Error('Cannot sync while offline');
@@ -191,142 +141,84 @@ export const syncAPI = {
     }
     return response.data;
   },
-
   downloadOfflineData: async () => {
     const response = await api.get('/sync/download');
     await db.initializeOfflineData(response.data);
     return response.data;
   },
-
-  getSyncHistory: async () => {
-    const response = await api.get('/sync/history');
-    return response.data;
-  },
+  getSyncHistory: async () => { const response = await api.get('/sync/history'); return response.data; },
 };
 
-// Users API
 export const usersAPI = {
-  getAll: async () => {
-    const response = await api.get('/users');
-    return response.data;
-  },
-
-  create: async (userData) => {
-    const response = await api.post('/users', userData);
-    return response.data;
-  },
-
-  update: async (id, userData) => {
-    const response = await api.put(`/users/${id}`, userData);
-    return response.data;
-  },
-
-  delete: async (id) => {
-    const response = await api.delete(`/users/${id}`);
-    return response.data;
-  },
-
-  changePassword: async (id, newPassword) => {
-    const response = await api.put(`/users/${id}/password`, { newPassword });
-    return response.data;
-  },
-
-  getProfile: async () => {
-    const response = await api.get('/users/me');
-    return response.data;
-  },
+  getAll: async () => { const response = await api.get('/users'); return response.data; },
+  create: async (userData) => { const response = await api.post('/users', userData); return response.data; },
+  update: async (id, userData) => { const response = await api.put(`/users/${id}`, userData); return response.data; },
+  delete: async (id) => { const response = await api.delete(`/users/${id}`); return response.data; },
+  changePassword: async (id, newPassword) => { const response = await api.put(`/users/${id}/password`, { newPassword }); return response.data; },
+  getProfile: async () => { const response = await api.get('/users/me'); return response.data; },
 };
 
-// System API (Admin only)
 export const systemAPI = {
   getAuditLogs: async (filters = {}) => {
     const params = new URLSearchParams(filters);
     const response = await api.get(`/system/audit-logs?${params.toString()}`);
     return response.data;
   },
-
-  getStats: async () => {
-    const response = await api.get('/system/stats');
-    return response.data;
-  },
-
+  getStats: async () => { const response = await api.get('/system/stats'); return response.data; },
   convertPdfForm: async (base64Data) => {
     const response = await api.post('/system/convert-pdf-form', { pdfBase64: base64Data });
     return response.data;
   },
 };
 
-// CAPA API
 export const capaAPI = {
   getAll: async (filters = {}) => {
     const params = new URLSearchParams(filters);
     const response = await api.get(`/capa?${params.toString()}`);
     return response.data;
   },
-
-  create: async (data) => {
-    const response = await api.post('/capa', data);
-    return response.data;
-  },
-
-  update: async (id, data) => {
-    const response = await api.put(`/capa/${id}`, data);
-    return response.data;
-  },
-
-  delete: async (id) => {
-    const response = await api.delete(`/capa/${id}`);
-    return response.data;
-  },
-
-  getStats: async () => {
-    const response = await api.get('/capa/stats');
-    return response.data;
-  },
+  create: async (data) => { const response = await api.post('/capa', data); return response.data; },
+  update: async (id, data) => { const response = await api.put(`/capa/${id}`, data); return response.data; },
+  delete: async (id) => { const response = await api.delete(`/capa/${id}`); return response.data; },
+  getStats: async () => { const response = await api.get('/capa/stats'); return response.data; },
 };
 
-// Schedules API
 export const schedulesAPI = {
-  getAll: async () => {
-    const response = await api.get('/schedules');
+  getAll: async () => { const response = await api.get('/schedules'); return response.data; },
+  getById: async (id) => { const response = await api.get(`/schedules/${id}`); return response.data; },
+  create: async (data) => { const response = await api.post('/schedules', data); return response.data; },
+  update: async (id, data) => { const response = await api.put(`/schedules/${id}`, data); return response.data; },
+  delete: async (id) => { const response = await api.delete(`/schedules/${id}`); return response.data; },
+  start: async (id) => { const response = await api.post(`/schedules/${id}/start`); return response.data; },
+  complete: async (id) => { const response = await api.put(`/schedules/${id}`, { status: 'completed' }); return response.data; },
+  cancelStart: async (id) => { const response = await api.post(`/schedules/${id}/cancel`); return response.data; },
+};
+
+// RFI API
+export const rfiAPI = {
+  getAll: async (filters = {}) => {
+    const params = new URLSearchParams(filters);
+    const response = await api.get(`/rfi?${params.toString()}`);
     return response.data;
   },
-
   getById: async (id) => {
-    const response = await api.get(`/schedules/${id}`);
+    const response = await api.get(`/rfi/${id}`);
     return response.data;
   },
-
   create: async (data) => {
-    const response = await api.post('/schedules', data);
+    const response = await api.post('/rfi', data);
     return response.data;
   },
-
   update: async (id, data) => {
-    const response = await api.put(`/schedules/${id}`, data);
+    const response = await api.put(`/rfi/${id}`, data);
     return response.data;
   },
-
   delete: async (id) => {
-    const response = await api.delete(`/schedules/${id}`);
+    const response = await api.delete(`/rfi/${id}`);
     return response.data;
   },
-
-  // Launch a pre-populated inspection from a schedule
-  start: async (id) => {
-    const response = await api.post(`/schedules/${id}/start`);
-    return response.data;
-  },
-
-  // Mark a schedule as completed after inspection is submitted
-  complete: async (id) => {
-    const response = await api.put(`/schedules/${id}`, { status: 'completed' });
-    return response.data;
-  },
-
-  // Reset a schedule back to pending when inspector cancels
-  cancelStart: async (id) => {
-    const response = await api.post(`/schedules/${id}/cancel`);
+  getStats: async () => {
+    const response = await api.get('/rfi/stats');
     return response.data;
   },
 };
