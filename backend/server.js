@@ -23,7 +23,6 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Rate limiter — login endpoint only
-// 20 attempts per 5 minutes per IP — catches bots/brute force without blocking real users
 const loginLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 20,
@@ -47,6 +46,7 @@ app.use('/api/sync', require('./routes/sync'));
 app.use('/api/system', require('./routes/system'));
 app.use('/api/capa', require('./routes/corrective-actions'));
 app.use('/api/schedules', require('./routes/schedules'));
+app.use('/api/rfi', require('./routes/rfi'));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -56,7 +56,7 @@ app.get('/api/health', (req, res) => {
 // Error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
+  res.status(500).json({
     error: 'Something went wrong!',
     message: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
