@@ -16,7 +16,10 @@ const UserManagement = lazy(() => import('./components/UserManagement'));
 const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
 const AuditLogs = lazy(() => import('./components/AuditLogs'));
 const CorrectiveActions = lazy(() => import('./components/CorrectiveActions'));
-const Schedule = lazy(() => import('./components/Schedule'));
+const Schedule         = lazy(() => import('./components/Schedule'));
+const RFIList          = lazy(() => import('./components/RFIList'));
+const RFIForm          = lazy(() => import('./components/RFIForm'));
+const RFIDetail        = lazy(() => import('./components/RFIDetail'));
 
 // Fallback shown while a lazy component is loading
 function PageLoader() {
@@ -183,6 +186,12 @@ function App() {
                 path="/schedule"
                 element={user ? <Schedule user={user} /> : <Navigate to="/login" />}
               />
+
+              {/* RFI routes */}
+              <Route path="/rfi" element={user ? <RFIList user={user} /> : <Navigate to="/login" />} />
+              <Route path="/rfi/new" element={user ? <RFIForm user={user} /> : <Navigate to="/login" />} />
+              <Route path="/rfi/:id" element={user ? <RFIDetail user={user} /> : <Navigate to="/login" />} />
+              <Route path="/rfi/:id/edit" element={user ? <RFIForm user={user} /> : <Navigate to="/login" />} />
 
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
