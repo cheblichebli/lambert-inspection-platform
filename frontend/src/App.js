@@ -5,23 +5,22 @@ import Login from './components/Login';
 import Navigation from './components/Navigation';
 import './App.css';
 
-// Lazy-loaded route components — each loads only when first visited
-const Dashboard = lazy(() => import('./components/Dashboard'));
-const InspectionList = lazy(() => import('./components/InspectionList'));
-const InspectionForm = lazy(() => import('./components/InspectionForm'));
+const Dashboard        = lazy(() => import('./components/Dashboard'));
+const InspectionList   = lazy(() => import('./components/InspectionList'));
+const InspectionForm   = lazy(() => import('./components/InspectionForm'));
 const InspectionDetail = lazy(() => import('./components/InspectionDetail'));
-const FormBuilder = lazy(() => import('./components/FormBuilder'));
-const FormList = lazy(() => import('./components/FormList'));
-const UserManagement = lazy(() => import('./components/UserManagement'));
-const AdminDashboard = lazy(() => import('./components/AdminDashboard'));
-const AuditLogs = lazy(() => import('./components/AuditLogs'));
+const FormBuilder      = lazy(() => import('./components/FormBuilder'));
+const FormList         = lazy(() => import('./components/FormList'));
+const UserManagement   = lazy(() => import('./components/UserManagement'));
+const AdminDashboard   = lazy(() => import('./components/AdminDashboard'));
+const AuditLogs        = lazy(() => import('./components/AuditLogs'));
 const CorrectiveActions = lazy(() => import('./components/CorrectiveActions'));
 const Schedule         = lazy(() => import('./components/Schedule'));
 const RFIList          = lazy(() => import('./components/RFIList'));
 const RFIForm          = lazy(() => import('./components/RFIForm'));
 const RFIDetail        = lazy(() => import('./components/RFIDetail'));
+const RFILog           = lazy(() => import('./components/RFILog'));
 
-// Fallback shown while a lazy component is loading
 function PageLoader() {
   return (
     <div className="loading-screen">
@@ -63,10 +62,8 @@ function App() {
     };
 
     const handleOffline = () => setIsOnline(false);
-
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
@@ -92,107 +89,27 @@ function App() {
     <Router>
       <div className="app">
         {user && <Navigation user={user} onLogout={handleLogout} isOnline={isOnline} />}
-
         <div className={user ? "main-content" : "login-page-wrapper"}>
           <Suspense fallback={<PageLoader />}>
             <Routes>
-              <Route
-                path="/login"
-                element={user ? <Navigate to="/" /> : <Login onLogin={setUser} />}
-              />
-
-              <Route
-                path="/"
-                element={user ? <Dashboard user={user} /> : <Navigate to="/login" />}
-              />
-
-              <Route
-                path="/admin"
-                element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/dashboard" />}
-              />
-
-              <Route
-                path="/audit-logs"
-                element={user?.role === 'admin' ? <AuditLogs /> : <Navigate to="/dashboard" />}
-              />
-
-              <Route
-                path="/inspections"
-                element={user ? <InspectionList user={user} /> : <Navigate to="/login" />}
-              />
-
-              <Route
-                path="/inspections/new"
-                element={user ? <InspectionForm user={user} /> : <Navigate to="/login" />}
-              />
-
-              <Route
-                path="/inspections/:id"
-                element={user ? <InspectionDetail user={user} /> : <Navigate to="/login" />}
-              />
-
-              <Route
-                path="/forms"
-                element={
-                  user && ['admin', 'supervisor'].includes(user.role) ? (
-                    <FormList user={user} />
-                  ) : (
-                    <Navigate to="/" />
-                  )
-                }
-              />
-
-              <Route
-                path="/forms/new"
-                element={
-                  user && user.role === 'admin' ? (
-                    <FormBuilder />
-                  ) : (
-                    <Navigate to="/" />
-                  )
-                }
-              />
-
-              <Route
-                path="/forms/:id/edit"
-                element={
-                  user && user.role === 'admin' ? (
-                    <FormBuilder />
-                  ) : (
-                    <Navigate to="/" />
-                  )
-                }
-              />
-
-              <Route
-                path="/users"
-                element={
-                  user && user.role === 'admin' ? (
-                    <UserManagement />
-                  ) : (
-                    <Navigate to="/" />
-                  )
-                }
-              />
-
-              {/* CAPA — all roles, scoped by backend */}
-              <Route
-                path="/capa"
-                element={user ? <CorrectiveActions user={user} /> : <Navigate to="/login" />}
-              />
-
-              {/* Schedule — all roles can view */}
-              <Route
-                path="/schedule"
-                element={user ? <Schedule user={user} /> : <Navigate to="/login" />}
-              />
-
-              {/* RFI routes */}
+              <Route path="/login" element={user ? <Navigate to="/" /> : <Login onLogin={setUser} />} />
+              <Route path="/" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />
+              <Route path="/admin" element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/dashboard" />} />
+              <Route path="/audit-logs" element={user?.role === 'admin' ? <AuditLogs /> : <Navigate to="/dashboard" />} />
+              <Route path="/inspections" element={user ? <InspectionList user={user} /> : <Navigate to="/login" />} />
+              <Route path="/inspections/new" element={user ? <InspectionForm user={user} /> : <Navigate to="/login" />} />
+              <Route path="/inspections/:id" element={user ? <InspectionDetail user={user} /> : <Navigate to="/login" />} />
+              <Route path="/forms" element={user && ['admin', 'supervisor'].includes(user.role) ? <FormList user={user} /> : <Navigate to="/" />} />
+              <Route path="/forms/new" element={user && user.role === 'admin' ? <FormBuilder /> : <Navigate to="/" />} />
+              <Route path="/forms/:id/edit" element={user && user.role === 'admin' ? <FormBuilder /> : <Navigate to="/" />} />
+              <Route path="/users" element={user && user.role === 'admin' ? <UserManagement /> : <Navigate to="/" />} />
+              <Route path="/capa" element={user ? <CorrectiveActions user={user} /> : <Navigate to="/login" />} />
+              <Route path="/schedule" element={user ? <Schedule user={user} /> : <Navigate to="/login" />} />
               <Route path="/rfi" element={user ? <RFIList user={user} /> : <Navigate to="/login" />} />
+              <Route path="/rfi/log" element={user ? <RFILog user={user} /> : <Navigate to="/login" />} />
               <Route path="/rfi/new" element={user ? <RFIForm user={user} /> : <Navigate to="/login" />} />
               <Route path="/rfi/:id" element={user ? <RFIDetail user={user} /> : <Navigate to="/login" />} />
               <Route path="/rfi/:id/edit" element={user ? <RFIForm user={user} /> : <Navigate to="/login" />} />
-
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </Suspense>
