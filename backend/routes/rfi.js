@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken, authorizeRoles } = require('../middleware/auth');
 
-// ── GET /api/rfi ─────────────────────────────────────────────────────────────
-// All roles can read; inspectors see only RFIs they initiated
+// ── GET /api/rfi ──────────────────────────────────────────────────────────────
 router.get('/', authenticateToken, async (req, res) => {
   const db = req.app.get('db');
   const user = req.user;
@@ -25,11 +24,13 @@ router.get('/', authenticateToken, async (req, res) => {
       SELECT r.*,
         u_i.full_name AS initiated_by_name,
         u_a.full_name AS assigned_to_name,
-        u_r.full_name AS reviewed_by_name
+        u_r.full_name AS reviewed_by_name,
+        p.name        AS project_name
       FROM rfis r
       LEFT JOIN users u_i ON r.initiated_by = u_i.id
       LEFT JOIN users u_a ON r.assigned_to  = u_a.id
       LEFT JOIN users u_r ON r.reviewed_by  = u_r.id
+      LEFT JOIN projects p ON r.project_id  = p.id
       ${clause}
       ORDER BY r.created_at DESC
     `, vals);
@@ -78,11 +79,13 @@ router.get('/:id', authenticateToken, async (req, res) => {
         u_i.full_name AS initiated_by_name,
         u_i.email     AS initiated_by_email,
         u_a.full_name AS assigned_to_name,
-        u_r.full_name AS reviewed_by_name
+        u_r.full_name AS reviewed_by_name,
+        p.name        AS project_name
       FROM rfis r
       LEFT JOIN users u_i ON r.initiated_by = u_i.id
       LEFT JOIN users u_a ON r.assigned_to  = u_a.id
       LEFT JOIN users u_r ON r.reviewed_by  = u_r.id
+      LEFT JOIN projects p ON r.project_id  = p.id
       WHERE r.id = $1
     `, [req.params.id]);
     if (!result.rows.length) return res.status(404).json({ error: 'RFI not found' });
@@ -94,33 +97,46 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // ── POST /api/rfi ─────────────────────────────────────────────────────────────
-// Any authenticated user can initiate an RFI (creates as draft)
 router.post('/', authenticateToken, async (req, res) => {
   const db = req.app.get('db');
   const {
-    type, stage, system, sub_system, location, coordinates,
+    type, phase_of_work, tc_level, system, sub_system,
+    drawing_no, as_built, floor, location, coordinates,
     test_results, description, drawing_data, drawing_filename,
-    assigned_to, project
+    assigned_to, project_id,
   } = req.body;
 
-  if (!type || !stage) {
-    return res.status(400).json({ error: 'Type and Stage are required' });
+  if (!type || !phase_of_work) {
+    return res.status(400).json({ error: 'Type and Phase of Work are required' });
   }
 
   try {
     const result = await db.query(`
       INSERT INTO rfis
-        (type, stage, system, sub_system, location, coordinates,
+        (type, phase_of_work, tc_level, system, sub_system,
+         drawing_no, as_built, floor, location, coordinates,
          test_results, description, drawing_data, drawing_filename,
-         initiated_by, assigned_to, project, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'draft')
+         initiated_by, assigned_to, project_id, status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'draft')
       RETURNING *
     `, [
-      type, stage, system || null, sub_system || null, location || null,
-      coordinates || null, test_results || null, description || null,
-      drawing_data || null, drawing_filename || null,
-      parseInt(req.user.id), assigned_to || null,
-      project || '10 Queens Drive'
+      type,
+      phase_of_work,
+      tc_level || null,
+      system || null,
+      sub_system || null,
+      drawing_no || null,
+      as_built || false,
+      floor || null,
+      location || null,
+      coordinates || null,
+      test_results || null,
+      description || null,
+      drawing_data || null,
+      drawing_filename || null,
+      parseInt(req.user.id),
+      assigned_to ? parseInt(assigned_to) : null,
+      project_id ? parseInt(project_id) : null,
     ]);
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -130,7 +146,6 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // ── PUT /api/rfi/:id ──────────────────────────────────────────────────────────
-// Initiator can edit draft; QC/supervisor can update status & attach QC docs
 router.put('/:id', authenticateToken, async (req, res) => {
   const db = req.app.get('db');
   const user = req.user;
@@ -141,43 +156,56 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (!existing.rows.length) return res.status(404).json({ error: 'RFI not found' });
     const rfi = existing.rows[0];
 
-    // Inspectors can only edit their own drafts
     if (user.role === 'inspector' &&
         (rfi.initiated_by !== parseInt(user.id) || rfi.status !== 'draft')) {
       return res.status(403).json({ error: 'Not permitted' });
     }
 
     const {
-      type, stage, system, sub_system, location, coordinates,
+      type, phase_of_work, tc_level, system, sub_system,
+      drawing_no, as_built, floor, location, coordinates,
       test_results, description, drawing_data, drawing_filename,
-      assigned_to, status, qc_comments, qc_attachments, project
+      assigned_to, project_id, status, qc_comments, qc_attachments, reply_date, cycle,
     } = req.body;
 
     const updates = [], vals = [];
     let i = 1;
 
-    const field = (col, val) => { if (val !== undefined) { updates.push(`${col}=$${i++}`); vals.push(val); } };
+    const field = (col, val) => {
+      if (val !== undefined) { updates.push(`${col}=$${i++}`); vals.push(val); }
+    };
 
     field('type', type);
-    field('stage', stage);
+    field('phase_of_work', phase_of_work);
+    field('tc_level', tc_level);
     field('system', system);
     field('sub_system', sub_system);
+    field('drawing_no', drawing_no);
+    field('as_built', as_built);
+    field('floor', floor);
     field('location', location);
     field('coordinates', coordinates);
     field('test_results', test_results);
     field('description', description);
     field('drawing_data', drawing_data);
     field('drawing_filename', drawing_filename);
-    field('assigned_to', assigned_to);
     field('qc_comments', qc_comments);
-    field('project', project);
+    field('reply_date', reply_date);
+    field('cycle', cycle);
 
+    if (assigned_to !== undefined) {
+      updates.push(`assigned_to=$${i++}`);
+      vals.push(assigned_to ? parseInt(assigned_to) : null);
+    }
+    if (project_id !== undefined) {
+      updates.push(`project_id=$${i++}`);
+      vals.push(project_id ? parseInt(project_id) : null);
+    }
     if (qc_attachments !== undefined) {
       updates.push(`qc_attachments=$${i++}`);
       vals.push(JSON.stringify(qc_attachments));
     }
 
-    // Status transitions
     if (status !== undefined) {
       updates.push(`status=$${i++}`);
       vals.push(status);
@@ -190,14 +218,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
       if (['approved','approved_commented_resubmit','approved_commented_no_resubmit','rejected'].includes(status)) {
         updates.push(`reviewed_by=$${i++}`); vals.push(parseInt(user.id));
         updates.push(`reviewed_at=$${i++}`); vals.push(new Date().toISOString());
-      }
-
-      // Resubmission — increment cycle and reset to draft
-      if (status === 'resubmitted') {
-        updates.push(`cycle=$${i++}`); vals.push(rfi.cycle + 1);
-        updates.push(`status=$${i - 1}`); // already pushed status above, fix to draft
-        // Replace the last status push with 'submitted'
-        vals[vals.length - (vals.length - (i - 2))] = 'submitted';
       }
     }
 
@@ -221,7 +241,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
           `NCR — ${rfi.rfi_number || 'RFI'}: ${rfi.description || 'Non-conformity'}`,
           qc_comments || 'RFI rejected — corrective action required',
           rfi.initiated_by,
-          parseInt(user.id)
+          parseInt(user.id),
         ]);
         await db.query(
           'UPDATE rfis SET ncr_triggered=true, ncr_capa_id=$1 WHERE id=$2',
@@ -229,7 +249,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
         );
       } catch (capaErr) {
         console.error('Auto-CAPA on rejection failed:', capaErr);
-        // Non-fatal — RFI update still succeeds
       }
     }
 
@@ -241,7 +260,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // ── DELETE /api/rfi/:id ───────────────────────────────────────────────────────
-// Admin only
 router.delete('/:id', authenticateToken, authorizeRoles('admin'), async (req, res) => {
   const db = req.app.get('db');
   try {
