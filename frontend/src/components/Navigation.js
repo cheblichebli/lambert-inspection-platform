@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, ClipboardCheck, FileText, Users, LogOut, Settings, Menu, X, Shield, AlertTriangle, Calendar, ClipboardList } from 'lucide-react';
+import { Home, ClipboardCheck, FileText, Users, LogOut, Settings, Menu, X, Shield, AlertTriangle, Calendar, ClipboardList, TableProperties } from 'lucide-react';
 import SyncStatus from './SyncStatus';
 
 const Navigation = ({ user, onLogout, isOnline }) => {
@@ -11,7 +11,6 @@ const Navigation = ({ user, onLogout, isOnline }) => {
 
   return (
     <>
-      {/* ── Mobile top bar ─────────────────────────────────────────────── */}
       <div className="nav-mobile-bar">
         <Link to="/" style={{ display: 'flex', alignItems: 'center' }}>
           <img src="/lambert-logo-white.png" alt="Lambert" style={{ height: '36px', width: 'auto' }} />
@@ -21,10 +20,8 @@ const Navigation = ({ user, onLogout, isOnline }) => {
         </button>
       </div>
 
-      {/* ── Sidebar (desktop) + slide-down menu (mobile) ───────────────── */}
       <nav className={`navigation ${isOpen ? 'nav-open' : ''}`}>
 
-        {/* Brand — desktop sidebar only */}
         <div className="nav-brand">
           <Link to="/" onClick={() => setIsOpen(false)}>
             <img src="/lambert-logo-white.png" alt="Lambert" style={{ height: '44px', width: 'auto' }} />
@@ -42,9 +39,14 @@ const Navigation = ({ user, onLogout, isOnline }) => {
             <span>Inspections</span>
           </Link>
 
-          <Link to="/rfi" className={`nav-link ${location.pathname.startsWith('/rfi') ? 'nav-link-active' : ''}`} onClick={() => setIsOpen(false)}>
+          <Link to="/rfi" className={`nav-link ${location.pathname.startsWith('/rfi') && location.pathname !== '/rfi/log' ? 'nav-link-active' : ''}`} onClick={() => setIsOpen(false)}>
             <ClipboardList size={20} />
             <span>RFI</span>
+          </Link>
+
+          <Link to="/rfi/log" className={`nav-link ${isActive('/rfi/log') ? 'nav-link-active' : ''}`} onClick={() => setIsOpen(false)}>
+            <TableProperties size={20} />
+            <span>RFI Log</span>
           </Link>
 
           <Link to="/schedule" className={`nav-link ${isActive('/schedule') ? 'nav-link-active' : ''}`} onClick={() => setIsOpen(false)}>
@@ -86,7 +88,6 @@ const Navigation = ({ user, onLogout, isOnline }) => {
           )}
         </div>
 
-        {/* Bottom section — sync + logout */}
         <div className="nav-bottom">
           <div className="nav-sync-wrapper">
             <SyncStatus isOnline={isOnline} />
@@ -99,7 +100,6 @@ const Navigation = ({ user, onLogout, isOnline }) => {
 
       </nav>
 
-      {/* Mobile overlay — tap outside to close */}
       {isOpen && <div className="nav-overlay" onClick={() => setIsOpen(false)} />}
     </>
   );
