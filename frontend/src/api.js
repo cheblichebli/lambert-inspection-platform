@@ -194,7 +194,6 @@ export const schedulesAPI = {
   cancelStart: async (id) => { const response = await api.post(`/schedules/${id}/cancel`); return response.data; },
 };
 
-// RFI API
 export const rfiAPI = {
   getAll: async (filters = {}) => {
     const params = new URLSearchParams(filters);
@@ -219,6 +218,45 @@ export const rfiAPI = {
   },
   getStats: async () => {
     const response = await api.get('/rfi/stats');
+    return response.data;
+  },
+};
+
+export const projectsAPI = {
+  getAll: async () => {
+    const response = await api.get('/projects');
+    return response.data;
+  },
+  getById: async (id) => {
+    const response = await api.get(`/projects/${id}`);
+    return response.data;
+  },
+  create: async (data) => {
+    const response = await api.post('/projects', data);
+    return response.data;
+  },
+  update: async (id, data) => {
+    const response = await api.put(`/projects/${id}`, data);
+    return response.data;
+  },
+  delete: async (id) => {
+    const response = await api.delete(`/projects/${id}`);
+    return response.data;
+  },
+};
+
+export const uploadAPI = {
+  upload: async (file, folder = 'rfi') => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('folder', folder);
+    const response = await api.post('/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+  delete: async (key) => {
+    const response = await api.delete('/upload', { data: { key } });
     return response.data;
   },
 };
