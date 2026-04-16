@@ -20,6 +20,8 @@ const RFIList          = lazy(() => import('./components/RFIList'));
 const RFIForm          = lazy(() => import('./components/RFIForm'));
 const RFIDetail        = lazy(() => import('./components/RFIDetail'));
 const RFILog           = lazy(() => import('./components/RFILog'));
+const ProjectList      = lazy(() => import('./components/ProjectList'));
+const ProjectForm      = lazy(() => import('./components/ProjectForm'));
 
 function PageLoader() {
   return (
@@ -85,6 +87,8 @@ function App() {
     );
   }
 
+  const isSupervisor = user && ['admin', 'supervisor'].includes(user.role);
+
   return (
     <Router>
       <div className="app">
@@ -94,19 +98,23 @@ function App() {
             <Routes>
               <Route path="/login" element={user ? <Navigate to="/" /> : <Login onLogin={setUser} />} />
               <Route path="/" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />
-              <Route path="/admin" element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/dashboard" />} />
-              <Route path="/audit-logs" element={user?.role === 'admin' ? <AuditLogs /> : <Navigate to="/dashboard" />} />
+              <Route path="/admin" element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/" />} />
+              <Route path="/audit-logs" element={user?.role === 'admin' ? <AuditLogs /> : <Navigate to="/" />} />
               <Route path="/inspections" element={user ? <InspectionList user={user} /> : <Navigate to="/login" />} />
               <Route path="/inspections/new" element={user ? <InspectionForm user={user} /> : <Navigate to="/login" />} />
               <Route path="/inspections/:id" element={user ? <InspectionDetail user={user} /> : <Navigate to="/login" />} />
-              <Route path="/forms" element={user && ['admin', 'supervisor'].includes(user.role) ? <FormList user={user} /> : <Navigate to="/" />} />
-              <Route path="/forms/new" element={user && user.role === 'admin' ? <FormBuilder /> : <Navigate to="/" />} />
-              <Route path="/forms/:id/edit" element={user && user.role === 'admin' ? <FormBuilder /> : <Navigate to="/" />} />
-              <Route path="/users" element={user && user.role === 'admin' ? <UserManagement /> : <Navigate to="/" />} />
+              <Route path="/forms" element={isSupervisor ? <FormList user={user} /> : <Navigate to="/" />} />
+              <Route path="/forms/new" element={user?.role === 'admin' ? <FormBuilder /> : <Navigate to="/" />} />
+              <Route path="/forms/:id/edit" element={user?.role === 'admin' ? <FormBuilder /> : <Navigate to="/" />} />
+              <Route path="/users" element={user?.role === 'admin' ? <UserManagement /> : <Navigate to="/" />} />
               <Route path="/capa" element={user ? <CorrectiveActions user={user} /> : <Navigate to="/login" />} />
               <Route path="/schedule" element={user ? <Schedule user={user} /> : <Navigate to="/login" />} />
+              {/* RFI routes */}
               <Route path="/rfi" element={user ? <RFIList user={user} /> : <Navigate to="/login" />} />
               <Route path="/rfi/log" element={user ? <RFILog user={user} /> : <Navigate to="/login" />} />
+              <Route path="/rfi/projects" element={isSupervisor ? <ProjectList user={user} /> : <Navigate to="/rfi" />} />
+              <Route path="/rfi/projects/new" element={isSupervisor ? <ProjectForm user={user} /> : <Navigate to="/rfi" />} />
+              <Route path="/rfi/projects/:id/edit" element={isSupervisor ? <ProjectForm user={user} /> : <Navigate to="/rfi" />} />
               <Route path="/rfi/new" element={user ? <RFIForm user={user} /> : <Navigate to="/login" />} />
               <Route path="/rfi/:id" element={user ? <RFIDetail user={user} /> : <Navigate to="/login" />} />
               <Route path="/rfi/:id/edit" element={user ? <RFIForm user={user} /> : <Navigate to="/login" />} />
