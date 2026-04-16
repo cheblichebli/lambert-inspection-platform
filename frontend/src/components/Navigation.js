@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, ClipboardCheck, FileText, Users, LogOut, Settings, Menu, X, Shield, AlertTriangle, Calendar, ClipboardList, TableProperties } from 'lucide-react';
+import { Home, ClipboardCheck, FileText, Users, LogOut, Settings, Menu, X, Shield, AlertTriangle, Calendar, ClipboardList, TableProperties, Building2 } from 'lucide-react';
 import SyncStatus from './SyncStatus';
 
 const Navigation = ({ user, onLogout, isOnline }) => {
@@ -8,6 +8,7 @@ const Navigation = ({ user, onLogout, isOnline }) => {
   const location = useLocation();
 
   const isActive = (path) => location.pathname === path;
+  const isSupervisor = ['admin', 'supervisor'].includes(user?.role);
 
   return (
     <>
@@ -21,7 +22,6 @@ const Navigation = ({ user, onLogout, isOnline }) => {
       </div>
 
       <nav className={`navigation ${isOpen ? 'nav-open' : ''}`}>
-
         <div className="nav-brand">
           <Link to="/" onClick={() => setIsOpen(false)}>
             <img src="/lambert-logo-white.png" alt="Lambert" style={{ height: '44px', width: 'auto' }} />
@@ -39,7 +39,8 @@ const Navigation = ({ user, onLogout, isOnline }) => {
             <span>Inspections</span>
           </Link>
 
-          <Link to="/rfi" className={`nav-link ${location.pathname.startsWith('/rfi') && location.pathname !== '/rfi/log' ? 'nav-link-active' : ''}`} onClick={() => setIsOpen(false)}>
+          {/* RFI Section */}
+          <Link to="/rfi" className={`nav-link ${location.pathname === '/rfi' || location.pathname.startsWith('/rfi/') && !location.pathname.startsWith('/rfi/log') && !location.pathname.startsWith('/rfi/projects') ? 'nav-link-active' : ''}`} onClick={() => setIsOpen(false)}>
             <ClipboardList size={20} />
             <span>RFI</span>
           </Link>
@@ -48,6 +49,13 @@ const Navigation = ({ user, onLogout, isOnline }) => {
             <TableProperties size={20} />
             <span>RFI Log</span>
           </Link>
+
+          {isSupervisor && (
+            <Link to="/rfi/projects" className={`nav-link ${location.pathname.startsWith('/rfi/projects') ? 'nav-link-active' : ''}`} onClick={() => setIsOpen(false)}>
+              <Building2 size={20} />
+              <span>Projects</span>
+            </Link>
+          )}
 
           <Link to="/schedule" className={`nav-link ${isActive('/schedule') ? 'nav-link-active' : ''}`} onClick={() => setIsOpen(false)}>
             <Calendar size={20} />
@@ -59,7 +67,7 @@ const Navigation = ({ user, onLogout, isOnline }) => {
             <span>CAPA</span>
           </Link>
 
-          {['admin', 'supervisor'].includes(user?.role) && (
+          {isSupervisor && (
             <Link to="/forms" className={`nav-link ${isActive('/forms') ? 'nav-link-active' : ''}`} onClick={() => setIsOpen(false)}>
               <FileText size={20} />
               <span>Forms</span>
@@ -97,7 +105,6 @@ const Navigation = ({ user, onLogout, isOnline }) => {
             <span>Logout</span>
           </button>
         </div>
-
       </nav>
 
       {isOpen && <div className="nav-overlay" onClick={() => setIsOpen(false)} />}
