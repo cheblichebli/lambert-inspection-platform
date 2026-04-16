@@ -90,7 +90,6 @@ const RFIForm = ({ user }) => {
       let drawingData = form.drawing_data;
       let drawingFilename = form.drawing_filename;
 
-      // Upload drawing to R2 if a new file was selected
       if (drawingFile) {
         setDrawingUploading(true);
         const uploaded = await uploadAPI.upload(drawingFile, 'rfi-drawings');
@@ -103,8 +102,8 @@ const RFIForm = ({ user }) => {
         ...form,
         drawing_data: drawingData || null,
         drawing_filename: drawingFilename || null,
-        assigned_to: form.assigned_to || null,
-        project_id: form.project_id || null,
+        assigned_to: form.assigned_to ? parseInt(form.assigned_to) : null,
+        project_id: form.project_id ? parseInt(form.project_id) : null,
         tc_level: form.tc_level || null,
       };
 
@@ -162,7 +161,7 @@ const RFIForm = ({ user }) => {
             <label style={labelStyle}>Project {reqStar}</label>
             <select value={form.project_id} onChange={e => set('project_id', e.target.value)} className="form-control" style={{ borderColor: errors.project_id ? '#ef4444' : undefined }}>
               <option value="">Select project...</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {projects.filter(p => p.is_active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
             {errors.project_id && <p style={errStyle}>{errors.project_id}</p>}
           </div>
