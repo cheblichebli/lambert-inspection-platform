@@ -48,6 +48,7 @@ app.use('/api/capa', require('./routes/corrective-actions'));
 app.use('/api/schedules', require('./routes/schedules'));
 app.use('/api/rfi', require('./routes/rfi'));
 app.use('/api/upload', require('./routes/upload'));
+app.use('/api/projects', require('./routes/projects'));
 
 // Health check
 app.get('/api/health', (req, res) => {
