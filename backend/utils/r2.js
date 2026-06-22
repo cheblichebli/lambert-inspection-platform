@@ -3,6 +3,7 @@ const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/cl
 const r2 = new S3Client({
   region: 'auto',
   endpoint: process.env.R2_ENDPOINT,
+  forcePathStyle: true,
   credentials: {
     accessKeyId: process.env.R2_ACCESS_KEY_ID,
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
@@ -27,4 +28,3 @@ const deleteFromR2 = async (key) => {
 };
 
 module.exports = { uploadToR2, deleteFromR2 };
-
