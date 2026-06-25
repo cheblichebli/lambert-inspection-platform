@@ -20,6 +20,9 @@ const DOC_TYPES = [
   { key: 'attachment',     label: 'Supporting Attachment',        icon: '📎' },
 ];
 
+// Shared accepted file types: PDF, JPEG, PNG, Word, Excel
+const ACCEPTED_TYPES = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const fmtDateTime = (d) => d ? new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -37,6 +40,23 @@ const Section = ({ title, children }) => (
   </div>
 );
 
+// Read-only list of files (array of { filename, url })
+const FileList = ({ files }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    {files.map((f, i) => (
+      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+        <FileText size={18} style={{ color: '#4a9d5f', flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.filename}</p>
+        </div>
+        <a href={f.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#4a9d5f', fontWeight: 600, fontSize: '0.8rem', textDecoration: 'none' }}>
+          View <ExternalLink size={14} />
+        </a>
+      </div>
+    ))}
+  </div>
+);
+
 const RFIDetail = ({ user }) => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -50,9 +70,8 @@ const RFIDetail = ({ user }) => {
   const [qcAttachments, setQcAttachments] = useState([]);
   const [replyDate, setReplyDate] = useState('');
   const [submittingQC, setSubmittingQC] = useState(false);
-  const [uploadingDoc, setUploadingDoc] = useState(null); // key of doc type being uploaded
+  const [uploadingDoc, setUploadingDoc] = useState(null);
 
-  // Resubmit state
   const [submittingResubmit, setSubmittingResubmit] = useState(false);
 
   const isSupervisor = ['admin', 'supervisor'].includes(user?.role);
@@ -159,7 +178,14 @@ const RFIDetail = ({ user }) => {
   const canResubmit  = isInitiator && rfi.status === 'approved_commented_resubmit';
   const canEdit      = (isInitiator && rfi.status === 'draft') || (isSupervisor && ['submitted', 'in_review'].includes(rfi.status));
 
-  // Group attachments by doc type for display
+  // Build display arrays with backward-compat for legacy single-file / text records
+  let drawingFilesDisplay = Array.isArray(rfi.drawing_files) ? rfi.drawing_files : [];
+  if (drawingFilesDisplay.length === 0 && rfi.drawing_data) {
+    drawingFilesDisplay = [{ filename: rfi.drawing_filename || 'Drawing', url: rfi.drawing_data }];
+  }
+  const testResultFilesDisplay = Array.isArray(rfi.test_result_files) ? rfi.test_result_files : [];
+
+  // Group QC attachments by doc type
   const attByType = DOC_TYPES.reduce((acc, dt) => {
     acc[dt.key] = qcAttachments.filter(a => a.doc_type === dt.key || (!a.doc_type && dt.key === 'attachment'));
     return acc;
@@ -208,7 +234,7 @@ const RFIDetail = ({ user }) => {
         {/* RFI Details */}
         <Section title="RFI Details">
           <Row label="RFI Number"      value={rfi.rfi_number} />
-          <Row label="Project"         value={rfi.project} />
+          <Row label="Project"         value={rfi.project_name || rfi.project} />
           <Row label="Type"            value={rfi.type} />
           <Row label="Phase of Work"   value={rfi.phase_of_work} />
           <Row label="T&C Level"       value={rfi.tc_level} />
@@ -234,25 +260,22 @@ const RFIDetail = ({ user }) => {
           </Section>
         )}
 
-        {/* Test Results */}
-        {rfi.test_results && (
+        {/* Test Results / Supporting Data — files (with legacy text fallback) */}
+        {testResultFilesDisplay.length > 0 && (
+          <Section title={`Test Results / Supporting Data (${testResultFilesDisplay.length})`}>
+            <FileList files={testResultFilesDisplay} />
+          </Section>
+        )}
+        {testResultFilesDisplay.length === 0 && rfi.test_results && (
           <Section title="Test Results / Supporting Data">
             <p style={{ color: '#4b5563', whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: '0.9rem' }}>{rfi.test_results}</p>
           </Section>
         )}
 
-        {/* Drawing */}
-        {rfi.drawing_data && (
-          <Section title="Drawing Attachment">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-              <FileText size={20} style={{ color: '#4a9d5f' }} />
-              <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontWeight: 600, fontSize: '0.875rem', color: '#1e293b' }}>{rfi.drawing_filename || 'Drawing'}</p>
-              </div>
-              <a href={rfi.drawing_data} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#4a9d5f', fontWeight: 600, fontSize: '0.8rem', textDecoration: 'none' }}>
-                View <ExternalLink size={14} />
-              </a>
-            </div>
+        {/* Drawings — files */}
+        {drawingFilesDisplay.length > 0 && (
+          <Section title={`Drawing Attachments (${drawingFilesDisplay.length})`}>
+            <FileList files={drawingFilesDisplay} />
           </Section>
         )}
 
@@ -356,7 +379,7 @@ const RFIDetail = ({ user }) => {
                       <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#374151' }}>{dt.icon} {dt.label}</span>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: '#4a9d5f', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}>
                         {uploadingDoc === dt.key ? 'Uploading...' : <><Upload size={13} /> Add</>}
-                        <input type="file" accept="image/*,application/pdf" onChange={e => handleQCAttachment(e, dt)} style={{ display: 'none' }} disabled={uploadingDoc !== null} />
+                        <input type="file" accept={ACCEPTED_TYPES} onChange={e => handleQCAttachment(e, dt)} style={{ display: 'none' }} disabled={uploadingDoc !== null} />
                       </label>
                     </div>
                     {attByType[dt.key]?.map((att, i) => {
