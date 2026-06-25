@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { rfiAPI, usersAPI, projectsAPI, uploadAPI } from '../api';
-import { ArrowLeft, Upload, X, FileText } from 'lucide-react';
+import { ArrowLeft, Upload, X, FileText, ExternalLink } from 'lucide-react';
 
 const PHASES = [
   'Builders Work', '1st Fix', '2nd Fix', '3rd Fix',
@@ -14,6 +14,82 @@ const SYSTEMS = {
   Electrical: ['Power', 'Lighting', 'ELV', 'Lightning', 'Earthing', 'BMS', 'Other'],
 };
 
+// Shared accepted file types across all upload sections:
+// PDF, JPEG, PNG, Word (.doc/.docx), Excel (.xls/.xlsx)
+const ACCEPTED_TYPES = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const ACCEPTED_LABEL = 'PDF, image (JPEG/PNG), Word, or Excel — max 20MB';
+
+// Reusable multi-file upload block.
+// `files` is an array of { filename, url, key }. Uploads happen immediately to R2.
+const MultiFileUpload = ({ files, onChange, folder, title }) => {
+  const [uploading, setUploading] = useState(false);
+
+  const handleSelect = async (e) => {
+    const selected = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!selected.length) return;
+    setUploading(true);
+    try {
+      const uploadedAll = [];
+      for (const file of selected) {
+        const up = await uploadAPI.upload(file, folder);
+        uploadedAll.push({
+          filename: up.filename,
+          url: up.url,
+          key: up.key,
+          size: file.size,
+          uploaded_at: new Date().toISOString(),
+        });
+      }
+      onChange([...(files || []), ...uploadedAll]);
+    } catch (err) {
+      alert('One or more files failed to upload. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeFile = async (idx) => {
+    const f = files[idx];
+    if (f.key) { try { await uploadAPI.delete(f.key); } catch (_) {} }
+    onChange(files.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <div>
+      {(files || []).length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' }}>
+          {files.map((f, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+              <FileText size={16} style={{ color: '#4a9d5f', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontWeight: 600, color: '#1e293b', margin: 0, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.filename}</p>
+                {f.size && <p style={{ color: '#94a3b8', margin: 0, fontSize: '0.7rem' }}>{(f.size / 1024).toFixed(1)} KB</p>}
+              </div>
+              <a href={f.url} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#4a9d5f', fontSize: '0.75rem', fontWeight: 600, textDecoration: 'none' }}>
+                View <ExternalLink size={13} />
+              </a>
+              <button type="button" onClick={() => removeFile(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 0 }}>
+                <X size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 18px', background: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '8px', cursor: uploading ? 'wait' : 'pointer' }}>
+        <Upload size={20} style={{ color: '#4a9d5f', flexShrink: 0 }} />
+        <div>
+          <p style={{ margin: 0, fontWeight: 600, color: '#374151', fontSize: '0.875rem' }}>
+            {uploading ? 'Uploading...' : title}
+          </p>
+          <p style={{ margin: '2px 0 0', color: '#94a3b8', fontSize: '0.75rem' }}>{ACCEPTED_LABEL} · multiple allowed</p>
+        </div>
+        <input type="file" multiple accept={ACCEPTED_TYPES} onChange={handleSelect} style={{ display: 'none' }} disabled={uploading} />
+      </label>
+    </div>
+  );
+};
+
 const RFIForm = ({ user }) => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -22,16 +98,15 @@ const RFIForm = ({ user }) => {
   const [form, setForm] = useState({
     type: '', phase_of_work: '', tc_level: '', system: '', sub_system: '',
     drawing_no: '', as_built: false, floor: '', location: '', coordinates: '',
-    description: '', test_results: '', assigned_to: '', project_id: '',
+    description: '', assigned_to: '', project_id: '',
   });
+  const [testResultFiles, setTestResultFiles] = useState([]);
+  const [drawingFiles, setDrawingFiles] = useState([]);
   const [users, setUsers] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
-  const [drawingFile, setDrawingFile] = useState(null);
-  const [drawingUploading, setDrawingUploading] = useState(false);
-  const [existingDrawing, setExistingDrawing] = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -53,13 +128,16 @@ const RFIForm = ({ user }) => {
           location: data.location || '',
           coordinates: data.coordinates || '',
           description: data.description || '',
-          test_results: data.test_results || '',
           assigned_to: data.assigned_to || '',
           project_id: data.project_id || '',
         });
-        if (data.drawing_filename) {
-          setExistingDrawing({ filename: data.drawing_filename, url: data.drawing_data });
+        setTestResultFiles(Array.isArray(data.test_result_files) ? data.test_result_files : []);
+        // Migrate legacy single drawing into the multi-file array for display
+        let df = Array.isArray(data.drawing_files) ? data.drawing_files : [];
+        if (df.length === 0 && data.drawing_data) {
+          df = [{ filename: data.drawing_filename || 'Drawing', url: data.drawing_data }];
         }
+        setDrawingFiles(df);
         setLoading(false);
       }).catch(() => setLoading(false));
     }
@@ -77,31 +155,14 @@ const RFIForm = ({ user }) => {
     return Object.keys(e).length === 0;
   };
 
-  const handleDrawingSelect = (e) => {
-    const file = e.target.files[0];
-    if (file) setDrawingFile(file);
-    e.target.value = '';
-  };
-
   const handleSave = async (submitAfter = false) => {
     if (!validate()) return;
     setSubmitting(true);
     try {
-      let drawingData = form.drawing_data;
-      let drawingFilename = form.drawing_filename;
-
-      if (drawingFile) {
-        setDrawingUploading(true);
-        const uploaded = await uploadAPI.upload(drawingFile, 'rfi-drawings');
-        drawingData = uploaded.url;
-        drawingFilename = uploaded.filename;
-        setDrawingUploading(false);
-      }
-
       const payload = {
         ...form,
-        drawing_data: drawingData || null,
-        drawing_filename: drawingFilename || null,
+        test_result_files: testResultFiles,
+        drawing_files: drawingFiles,
         assigned_to: form.assigned_to ? parseInt(form.assigned_to) : null,
         project_id: form.project_id ? parseInt(form.project_id) : null,
         tc_level: form.tc_level || null,
@@ -121,7 +182,6 @@ const RFIForm = ({ user }) => {
       alert('Failed to save RFI. Please try again.');
     } finally {
       setSubmitting(false);
-      setDrawingUploading(false);
     }
   };
 
@@ -252,43 +312,25 @@ const RFIForm = ({ user }) => {
             </div>
             <div>
               <label style={labelStyle}>Test Results / Supporting Data</label>
-              <textarea value={form.test_results} onChange={e => set('test_results', e.target.value)} className="form-control" rows={3} placeholder="Include any test results, measurements, or commissioning data..." />
+              <MultiFileUpload
+                files={testResultFiles}
+                onChange={setTestResultFiles}
+                folder="rfi-test-results"
+                title="Upload Test Results / Supporting Data"
+              />
             </div>
           </div>
         </div>
 
-        {/* Drawing */}
+        {/* Drawings */}
         <div>
-          {sectionHeader('Drawing Attachment')}
-          {existingDrawing && !drawingFile && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', marginBottom: '10px' }}>
-              <FileText size={18} style={{ color: '#4a9d5f' }} />
-              <div style={{ flex: 1 }}>
-                <p style={{ fontWeight: 600, color: '#1e293b', margin: 0, fontSize: '0.875rem' }}>{existingDrawing.filename}</p>
-                <a href={existingDrawing.url} target="_blank" rel="noreferrer" style={{ color: '#4a9d5f', fontSize: '0.75rem' }}>View current drawing</a>
-              </div>
-              <button onClick={() => setExistingDrawing(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={16} /></button>
-            </div>
-          )}
-          {drawingFile ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-              <span style={{ fontSize: '1.5rem' }}>📎</span>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontWeight: 600, color: '#1e293b', margin: 0, fontSize: '0.875rem' }}>{drawingFile.name}</p>
-                <p style={{ color: '#64748b', margin: '2px 0 0', fontSize: '0.75rem' }}>{(drawingFile.size / 1024).toFixed(1)} KB — will upload on save</p>
-              </div>
-              <button onClick={() => setDrawingFile(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}><X size={18} /></button>
-            </div>
-          ) : (
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 18px', background: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '8px', cursor: 'pointer' }}>
-              <Upload size={20} style={{ color: '#4a9d5f', flexShrink: 0 }} />
-              <div>
-                <p style={{ margin: 0, fontWeight: 600, color: '#374151', fontSize: '0.875rem' }}>Upload Drawing</p>
-                <p style={{ margin: '2px 0 0', color: '#94a3b8', fontSize: '0.75rem' }}>PDF or image — max 20MB</p>
-              </div>
-              <input type="file" accept="image/*,application/pdf" onChange={handleDrawingSelect} style={{ display: 'none' }} />
-            </label>
-          )}
+          {sectionHeader('Drawing Attachments')}
+          <MultiFileUpload
+            files={drawingFiles}
+            onChange={setDrawingFiles}
+            folder="rfi-drawings"
+            title="Upload Drawing(s)"
+          />
         </div>
 
         {/* Assignment */}
@@ -307,10 +349,10 @@ const RFIForm = ({ user }) => {
         <div style={{ display: 'flex', gap: '10px', paddingTop: '8px', borderTop: '1px solid #f1f5f9', flexWrap: 'wrap' }}>
           <button onClick={() => navigate(-1)} className="btn btn-secondary" style={{ flex: 1 }} disabled={submitting}>Cancel</button>
           <button onClick={() => handleSave(false)} className="btn btn-secondary" style={{ flex: 1 }} disabled={submitting}>
-            {submitting && !drawingUploading ? 'Saving...' : 'Save Draft'}
+            {submitting ? 'Saving...' : 'Save Draft'}
           </button>
           <button onClick={() => handleSave(true)} className="btn btn-primary" style={{ flex: 2 }} disabled={submitting}>
-            {drawingUploading ? 'Uploading...' : submitting ? 'Submitting...' : 'Save & Submit to QC'}
+            {submitting ? 'Submitting...' : 'Save & Submit to QC'}
           </button>
         </div>
       </div>
