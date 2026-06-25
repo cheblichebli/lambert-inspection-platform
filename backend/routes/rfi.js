@@ -103,6 +103,7 @@ router.post('/', authenticateToken, async (req, res) => {
     type, phase_of_work, tc_level, system, sub_system,
     drawing_no, as_built, floor, location, coordinates,
     test_results, description, drawing_data, drawing_filename,
+    test_result_files, drawing_files,
     assigned_to, project_id,
   } = req.body;
 
@@ -116,8 +117,9 @@ router.post('/', authenticateToken, async (req, res) => {
         (type, phase_of_work, tc_level, system, sub_system,
          drawing_no, as_built, floor, location, coordinates,
          test_results, description, drawing_data, drawing_filename,
+         test_result_files, drawing_files,
          initiated_by, assigned_to, project_id, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'draft')
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'draft')
       RETURNING *
     `, [
       type,
@@ -134,6 +136,8 @@ router.post('/', authenticateToken, async (req, res) => {
       description || null,
       drawing_data || null,
       drawing_filename || null,
+      JSON.stringify(test_result_files || []),
+      JSON.stringify(drawing_files || []),
       parseInt(req.user.id),
       assigned_to ? parseInt(assigned_to) : null,
       project_id ? parseInt(project_id) : null,
@@ -165,6 +169,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       type, phase_of_work, tc_level, system, sub_system,
       drawing_no, as_built, floor, location, coordinates,
       test_results, description, drawing_data, drawing_filename,
+      test_result_files, drawing_files,
       assigned_to, project_id, status, qc_comments, qc_attachments, reply_date, cycle,
     } = req.body;
 
@@ -204,6 +209,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (qc_attachments !== undefined) {
       updates.push(`qc_attachments=$${i++}`);
       vals.push(JSON.stringify(qc_attachments));
+    }
+    if (test_result_files !== undefined) {
+      updates.push(`test_result_files=$${i++}`);
+      vals.push(JSON.stringify(test_result_files));
+    }
+    if (drawing_files !== undefined) {
+      updates.push(`drawing_files=$${i++}`);
+      vals.push(JSON.stringify(drawing_files));
     }
 
     if (status !== undefined) {
