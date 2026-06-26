@@ -247,8 +247,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
       try {
         const capaResult = await db.query(`
           INSERT INTO corrective_actions
-            (inspection_id, title, description, priority, assigned_to, created_by, status)
-          VALUES (NULL, $1, $2, 'major', $3, $4, 'open')
+            (inspection_id, flag_index, title, description, priority, assigned_to, created_by, status, recurrence_count)
+          VALUES (NULL, NULL, $1, $2, 'major', $3, $4, 'open', 0)
           RETURNING id
         `, [
           `NCR — ${rfi.rfi_number || 'RFI'}: ${rfi.description || 'Non-conformity'}`,
