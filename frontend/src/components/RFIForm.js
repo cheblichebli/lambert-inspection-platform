@@ -10,6 +10,8 @@ const PHASES = [
 ];
 const TC_LEVELS = ['L0', 'L1', 'L2a', 'L2b', 'L3a', 'L3b', 'L4', 'L5'];
 const TYPES = ['Mechanical', 'Electrical'];
+const OTHER = '__OTHER__';
+const FLOORS = ['B3', 'B2', 'B1', 'GF', ...Array.from({ length: 40 }, (_, i) => `F${i + 1}`)];
 
 // Shared accepted file types across all upload sections:
 // PDF, JPEG, PNG, Word (.doc/.docx), Excel (.xls/.xlsx)
@@ -17,7 +19,6 @@ const ACCEPTED_TYPES = '.pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx,application/p
 const ACCEPTED_LABEL = 'PDF, image (JPEG/PNG), Word, or Excel — max 20MB';
 
 // Reusable multi-file upload block.
-// `files` is an array of { filename, url, key }. Uploads happen immediately to R2.
 const MultiFileUpload = ({ files, onChange, folder, title }) => {
   const [uploading, setUploading] = useState(false);
 
@@ -97,6 +98,12 @@ const RFIForm = ({ user }) => {
     drawing_no: '', as_built: '', floor: '', location: '', coordinates: '',
     description: '', assigned_to: '', project_id: '',
   });
+  // "Other" free-text mode flags
+  const [systemOther, setSystemOther] = useState(false);
+  const [subSystemOther, setSubSystemOther] = useState(false);
+  const [componentOther, setComponentOther] = useState(false);
+  const [floorOther, setFloorOther] = useState(false);
+
   const [testResultFiles, setTestResultFiles] = useState([]);
   const [drawingFiles, setDrawingFiles] = useState([]);
   const [users, setUsers] = useState([]);
@@ -129,6 +136,18 @@ const RFIForm = ({ user }) => {
           assigned_to: data.assigned_to || '',
           project_id: data.project_id || '',
         });
+        // Detect custom ("Other") values so they open in text mode on edit
+        const sysList = getMainSystems(data.type || '');
+        const sOther = !!data.system && !sysList.includes(data.system);
+        const subList = sOther ? [] : getSubSystems(data.type || '', data.system || '');
+        const ssOther = !!data.sub_system && (sOther || !subList.includes(data.sub_system));
+        const compList = (sOther || ssOther) ? [] : getComponents(data.type || '', data.system || '', data.sub_system || '');
+        const cOther = !!data.component && (sOther || ssOther || !compList.includes(data.component));
+        setSystemOther(sOther);
+        setSubSystemOther(ssOther);
+        setComponentOther(cOther);
+        setFloorOther(!!data.floor && !FLOORS.includes(data.floor));
+
         setTestResultFiles(Array.isArray(data.test_result_files) ? data.test_result_files : []);
         let df = Array.isArray(data.drawing_files) ? data.drawing_files : [];
         if (df.length === 0 && data.drawing_data) {
@@ -142,10 +161,47 @@ const RFIForm = ({ user }) => {
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
-  // Cascading resets: changing a level clears everything below it
-  const onTypeChange = (val) => setForm(f => ({ ...f, type: val, system: '', sub_system: '', component: '' }));
-  const onSystemChange = (val) => setForm(f => ({ ...f, system: val, sub_system: '', component: '' }));
-  const onSubSystemChange = (val) => setForm(f => ({ ...f, sub_system: val, component: '' }));
+  // Cascading selects — picking "Other" flips that level (and forces children) to free-text
+  const onTypeChange = (val) => {
+    setSystemOther(false); setSubSystemOther(false); setComponentOther(false);
+    setForm(f => ({ ...f, type: val, system: '', sub_system: '', component: '' }));
+  };
+  const onSystemSelect = (val) => {
+    if (val === OTHER) {
+      setSystemOther(true); setSubSystemOther(false); setComponentOther(false);
+      setForm(f => ({ ...f, system: '', sub_system: '', component: '' }));
+    } else {
+      setSystemOther(false); setSubSystemOther(false); setComponentOther(false);
+      setForm(f => ({ ...f, system: val, sub_system: '', component: '' }));
+    }
+  };
+  const onSubSystemSelect = (val) => {
+    if (val === OTHER) {
+      setSubSystemOther(true); setComponentOther(false);
+      setForm(f => ({ ...f, sub_system: '', component: '' }));
+    } else {
+      setSubSystemOther(false); setComponentOther(false);
+      setForm(f => ({ ...f, sub_system: val, component: '' }));
+    }
+  };
+  const onComponentSelect = (val) => {
+    if (val === OTHER) {
+      setComponentOther(true);
+      setForm(f => ({ ...f, component: '' }));
+    } else {
+      setComponentOther(false);
+      setForm(f => ({ ...f, component: val }));
+    }
+  };
+  const onFloorSelect = (val) => {
+    if (val === OTHER) { setFloorOther(true); setForm(f => ({ ...f, floor: '' })); }
+    else { setFloorOther(false); setForm(f => ({ ...f, floor: val })); }
+  };
+
+  const exitSystemOther = () => { setSystemOther(false); setForm(f => ({ ...f, system: '', sub_system: '', component: '' })); };
+  const exitSubSystemOther = () => { setSubSystemOther(false); setForm(f => ({ ...f, sub_system: '', component: '' })); };
+  const exitComponentOther = () => { setComponentOther(false); setForm(f => ({ ...f, component: '' })); };
+  const exitFloorOther = () => { setFloorOther(false); setForm(f => ({ ...f, floor: '' })); };
 
   const validate = () => {
     const e = {};
@@ -156,6 +212,7 @@ const RFIForm = ({ user }) => {
     if (!form.system) e.system = 'Required';
     if (!form.sub_system) e.sub_system = 'Required';
     if (!form.component) e.component = 'Required';
+    if (!form.drawing_no) e.drawing_no = 'Required';
     if (!form.as_built) e.as_built = 'Required';
     if (!form.floor) e.floor = 'Required';
     if (!form.location) e.location = 'Required';
@@ -203,9 +260,16 @@ const RFIForm = ({ user }) => {
   const subSystemOptions = getSubSystems(form.type, form.system);
   const componentOptions = getComponents(form.type, form.system, form.sub_system);
 
+  // Effective free-text state (a parent in "Other" forces its children to text)
+  const subIsOther = systemOther || subSystemOther;
+  const subForcedByParent = systemOther;
+  const compIsOther = systemOther || subSystemOther || componentOther;
+  const compForcedByParent = systemOther || subSystemOther;
+
   const labelStyle = { display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' };
   const reqStar = <span style={{ color: '#ef4444' }}>*</span>;
   const errStyle = { fontSize: '0.75rem', color: '#dc2626', marginTop: '3px' };
+  const toggleLinkStyle = { fontSize: '0.72rem', color: '#4a9d5f', cursor: 'pointer', fontWeight: 600, marginTop: '4px', display: 'inline-block' };
   const sectionHeader = (title) => (
     <p style={{ fontSize: '0.75rem', fontWeight: 700, color: '#4a9d5f', textTransform: 'uppercase', letterSpacing: '0.07em', margin: '0 0 14px', paddingBottom: '6px', borderBottom: '2px solid #e2e8f0' }}>
       {title}
@@ -286,33 +350,65 @@ const RFIForm = ({ user }) => {
         <div>
           {sectionHeader('System Classification')}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            {/* Main MEPF System */}
             <div>
               <label style={labelStyle}>Main MEPF System {reqStar}</label>
-              <select value={form.system} onChange={e => onSystemChange(e.target.value)} className="form-control" style={errBorder('system')} disabled={!form.type}>
-                <option value="">{form.type ? 'Select main system...' : 'Select type first'}</option>
-                {mainSystemOptions.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              {systemOther ? (
+                <>
+                  <input type="text" value={form.system} onChange={e => set('system', e.target.value)} className="form-control" style={errBorder('system')} placeholder="Enter main system..." />
+                  <span onClick={exitSystemOther} style={toggleLinkStyle}>↺ Choose from list</span>
+                </>
+              ) : (
+                <select value={form.system} onChange={e => onSystemSelect(e.target.value)} className="form-control" style={errBorder('system')} disabled={!form.type}>
+                  <option value="">{form.type ? 'Select main system...' : 'Select type first'}</option>
+                  {mainSystemOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                  {form.type && <option value={OTHER}>Other (specify)</option>}
+                </select>
+              )}
               {errors.system && <p style={errStyle}>{errors.system}</p>}
             </div>
+
+            {/* Sub-System Group */}
             <div>
               <label style={labelStyle}>Sub-System Group {reqStar}</label>
-              <select value={form.sub_system} onChange={e => onSubSystemChange(e.target.value)} className="form-control" style={errBorder('sub_system')} disabled={!form.system}>
-                <option value="">{form.system ? 'Select sub-system...' : 'Select main system first'}</option>
-                {subSystemOptions.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+              {subIsOther ? (
+                <>
+                  <input type="text" value={form.sub_system} onChange={e => set('sub_system', e.target.value)} className="form-control" style={errBorder('sub_system')} placeholder="Enter sub-system group..." />
+                  {!subForcedByParent && <span onClick={exitSubSystemOther} style={toggleLinkStyle}>↺ Choose from list</span>}
+                </>
+              ) : (
+                <select value={form.sub_system} onChange={e => onSubSystemSelect(e.target.value)} className="form-control" style={errBorder('sub_system')} disabled={!form.system}>
+                  <option value="">{form.system ? 'Select sub-system...' : 'Select main system first'}</option>
+                  {subSystemOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                  {form.system && <option value={OTHER}>Other (specify)</option>}
+                </select>
+              )}
               {errors.sub_system && <p style={errStyle}>{errors.sub_system}</p>}
             </div>
+
+            {/* Specific Component */}
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>Specific Component / Area of Inspection {reqStar}</label>
-              <select value={form.component} onChange={e => set('component', e.target.value)} className="form-control" style={errBorder('component')} disabled={!form.sub_system}>
-                <option value="">{form.sub_system ? 'Select component...' : 'Select sub-system first'}</option>
-                {componentOptions.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
+              {compIsOther ? (
+                <>
+                  <input type="text" value={form.component} onChange={e => set('component', e.target.value)} className="form-control" style={errBorder('component')} placeholder="Enter specific component..." />
+                  {!compForcedByParent && <span onClick={exitComponentOther} style={toggleLinkStyle}>↺ Choose from list</span>}
+                </>
+              ) : (
+                <select value={form.component} onChange={e => onComponentSelect(e.target.value)} className="form-control" style={errBorder('component')} disabled={!form.sub_system}>
+                  <option value="">{form.sub_system ? 'Select component...' : 'Select sub-system first'}</option>
+                  {componentOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                  {form.sub_system && <option value={OTHER}>Other (specify)</option>}
+                </select>
+              )}
               {errors.component && <p style={errStyle}>{errors.component}</p>}
             </div>
+
+            {/* Drawing No. — now mandatory */}
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>Drawing No.</label>
-              <input type="text" value={form.drawing_no} onChange={e => set('drawing_no', e.target.value)} className="form-control" placeholder="e.g. QLT-SVA-A-DR-20-2001" />
+              <label style={labelStyle}>Drawing No. {reqStar}</label>
+              <input type="text" value={form.drawing_no} onChange={e => set('drawing_no', e.target.value)} className="form-control" style={errBorder('drawing_no')} placeholder="e.g. QLT-SVA-A-DR-20-2001" />
+              {errors.drawing_no && <p style={errStyle}>{errors.drawing_no}</p>}
             </div>
           </div>
         </div>
@@ -323,7 +419,18 @@ const RFIForm = ({ user }) => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div>
               <label style={labelStyle}>Floor {reqStar}</label>
-              <input type="text" value={form.floor} onChange={e => set('floor', e.target.value)} className="form-control" style={errBorder('floor')} placeholder="e.g. Ground Floor, 3rd Floor..." />
+              {floorOther ? (
+                <>
+                  <input type="text" value={form.floor} onChange={e => set('floor', e.target.value)} className="form-control" style={errBorder('floor')} placeholder="Enter floor..." />
+                  <span onClick={exitFloorOther} style={toggleLinkStyle}>↺ Choose from list</span>
+                </>
+              ) : (
+                <select value={form.floor} onChange={e => onFloorSelect(e.target.value)} className="form-control" style={errBorder('floor')}>
+                  <option value="">Select floor...</option>
+                  {FLOORS.map(fl => <option key={fl} value={fl}>{fl}</option>)}
+                  <option value={OTHER}>Other (specify)</option>
+                </select>
+              )}
               {errors.floor && <p style={errStyle}>{errors.floor}</p>}
             </div>
             <div>
