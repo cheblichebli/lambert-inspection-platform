@@ -104,7 +104,7 @@ router.post('/', authenticateToken, async (req, res) => {
     drawing_no, as_built, floor, location, coordinates,
     test_results, description, drawing_data, drawing_filename,
     test_result_files, drawing_files,
-    assigned_to, project_id,
+    assigned_to, project_id, component,
   } = req.body;
 
   if (!type || !phase_of_work) {
@@ -114,12 +114,12 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     const result = await db.query(`
       INSERT INTO rfis
-        (type, phase_of_work, tc_level, system, sub_system,
+        (type, phase_of_work, tc_level, system, sub_system, component,
          drawing_no, as_built, floor, location, coordinates,
          test_results, description, drawing_data, drawing_filename,
          test_result_files, drawing_files,
          initiated_by, assigned_to, project_id, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,'draft')
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,'draft')
       RETURNING *
     `, [
       type,
@@ -127,6 +127,7 @@ router.post('/', authenticateToken, async (req, res) => {
       tc_level || null,
       system || null,
       sub_system || null,
+      component || null,
       drawing_no || null,
       as_built || false,
       floor || null,
@@ -166,7 +167,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     const {
-      type, phase_of_work, tc_level, system, sub_system,
+      type, phase_of_work, tc_level, system, sub_system, component,
       drawing_no, as_built, floor, location, coordinates,
       test_results, description, drawing_data, drawing_filename,
       test_result_files, drawing_files,
@@ -185,6 +186,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     field('tc_level', tc_level);
     field('system', system);
     field('sub_system', sub_system);
+    field('component', component);
     field('drawing_no', drawing_no);
     field('as_built', as_built);
     field('floor', floor);
@@ -241,29 +243,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
       `UPDATE rfis SET ${updates.join(',')} WHERE id=$${i} RETURNING *`,
       vals
     );
-
-    // Auto-create CAPA when rejected
-    if (status === 'rejected') {
-      try {
-        const capaResult = await db.query(`
-          INSERT INTO corrective_actions
-            (inspection_id, flag_index, title, description, priority, assigned_to, created_by, status, recurrence_count)
-          VALUES (NULL, NULL, $1, $2, 'major', $3, $4, 'open', 0)
-          RETURNING id
-        `, [
-          `NCR — ${rfi.rfi_number || 'RFI'}: ${rfi.description || 'Non-conformity'}`,
-          qc_comments || 'RFI rejected — corrective action required',
-          rfi.initiated_by,
-          parseInt(user.id),
-        ]);
-        await db.query(
-          'UPDATE rfis SET ncr_triggered=true, ncr_capa_id=$1 WHERE id=$2',
-          [capaResult.rows[0].id, id]
-        );
-      } catch (capaErr) {
-        console.error('Auto-CAPA on rejection failed:', capaErr);
-      }
-    }
 
     res.json(result.rows[0]);
   } catch (err) {
