@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { rfiAPI, projectsAPI } from '../api';
-import { Download, FileSpreadsheet } from 'lucide-react';
+import { Download, FileSpreadsheet, X } from 'lucide-react';
 
 const STATUS_META = {
   draft:                          { label: 'Draft',                color: '#64748b' },
@@ -25,16 +25,19 @@ const RFILog = ({ user }) => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
   const [exporting, setExporting] = useState(false);
+
+  // Per-column filters
+  const [colFilters, setColFilters] = useState({
+    type: '', phase_of_work: '', tc_level: '', system: '', sub_system: '',
+    component: '', as_built: '', floor: '', location: '', status: '',
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const filters = {};
-      if (typeFilter) filters.type = typeFilter;
       const [data, proj] = await Promise.all([
-        rfiAPI.getAll(filters),
+        rfiAPI.getAll({}),
         projectsAPI.getAll(),
       ]);
       setRfis(data);
@@ -44,29 +47,62 @@ const RFILog = ({ user }) => {
     } finally {
       setLoading(false);
     }
-  }, [typeFilter]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
+  const setColFilter = (key, val) => setColFilters(f => ({ ...f, [key]: val }));
+  const clearFilters = () => setColFilters({
+    type: '', phase_of_work: '', tc_level: '', system: '', sub_system: '',
+    component: '', as_built: '', floor: '', location: '', status: '',
+  });
+
+  // Distinct values for the structured-field dropdowns (derived from loaded data)
+  const distinct = useMemo(() => {
+    const uniq = (key) => [...new Set(rfis.map(r => r[key]).filter(Boolean))].sort();
+    return {
+      type: uniq('type'),
+      phase_of_work: uniq('phase_of_work'),
+      tc_level: uniq('tc_level'),
+      system: uniq('system'),
+      sub_system: uniq('sub_system'),
+      component: uniq('component'),
+    };
+  }, [rfis]);
+
   const filtered = rfis.filter(r => {
     if (selectedProject && String(r.project_id) !== String(selectedProject)) return false;
+    if (colFilters.type && r.type !== colFilters.type) return false;
+    if (colFilters.phase_of_work && r.phase_of_work !== colFilters.phase_of_work) return false;
+    if (colFilters.tc_level && r.tc_level !== colFilters.tc_level) return false;
+    if (colFilters.system && r.system !== colFilters.system) return false;
+    if (colFilters.sub_system && r.sub_system !== colFilters.sub_system) return false;
+    if (colFilters.component && r.component !== colFilters.component) return false;
+    if (colFilters.status && r.status !== colFilters.status) return false;
+    if (colFilters.as_built) {
+      const ab = r.as_built ? 'YES' : 'NO';
+      if (ab !== colFilters.as_built) return false;
+    }
+    if (colFilters.floor && !String(r.floor || '').toLowerCase().includes(colFilters.floor.toLowerCase())) return false;
+    if (colFilters.location && !String(r.location || '').toLowerCase().includes(colFilters.location.toLowerCase())) return false;
     return true;
   });
 
+  const hasActiveFilters = selectedProject || Object.values(colFilters).some(Boolean);
   const selectedProjectData = projects.find(p => String(p.id) === String(selectedProject));
 
   const exportToExcel = async () => {
     setExporting(true);
     try {
-      // Build CSV content matching Lambert's RFI log format
       const projectName = selectedProjectData?.name || 'All Projects';
       const mainContractor = selectedProjectData?.main_contractor || '';
       const mepSub = selectedProjectData?.mep_subcontractor || 'Lambert Electromec';
       const preparedBy = user?.full_name || '';
+      const typeForRef = colFilters.type === 'Electrical' ? 'ELEC' : 'MECH';
 
       const headers = [
-        'RFI REF#', 'PHASE OF WORK', 'T&C Level', 'SYSTEM', 'SUB-SYSTEM',
-        'DRAWING NO.', 'AS-BUILT', 'DESCRIPTION', 'FLOOR', 'LOCATION',
+        'RFI REF#', 'PHASE OF WORK', 'T&C Level', 'MAIN MEPF SYSTEM', 'SUB-SYSTEM',
+        'SPECIFIC COMPONENT', 'DRAWING NO.', 'AS-BUILT', 'DESCRIPTION', 'FLOOR', 'LOCATION',
         'DATE OF SUBMISSION', 'STATUS', 'REPLY DATE', 'COMMENTS', 'REVISION'
       ];
 
@@ -76,6 +112,7 @@ const RFILog = ({ user }) => {
         r.tc_level || '',
         r.system || '',
         r.sub_system || '',
+        r.component || '',
         r.drawing_no || '',
         r.as_built ? 'YES' : 'NO',
         r.description || '',
@@ -88,9 +125,8 @@ const RFILog = ({ user }) => {
         r.cycle > 1 ? String(r.cycle - 1) : '0',
       ]);
 
-      // Build CSV with Lambert header block
       const csvLines = [
-        `LAMBERT ELECTROMEC,,,,,,,,LEM-QLT-${typeFilter === 'Electrical' ? 'ELEC' : 'MECH'}-L01`,
+        `LAMBERT ELECTROMEC,,,,,,,,LEM-QLT-${typeForRef}-L01`,
         `Request For Inspection Log,,,,,,,,EDITION 1`,
         `,,,,,,,,Effective Date`,
         `Project Title,,,${projectName}`,
@@ -105,7 +141,7 @@ const RFILog = ({ user }) => {
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      const filename = `RFI-Log-${typeFilter || 'All'}-${projectName.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`;
+      const filename = `RFI-Log-${colFilters.type || 'All'}-${projectName.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`;
       link.setAttribute('href', url);
       link.setAttribute('download', filename);
       document.body.appendChild(link);
@@ -131,6 +167,30 @@ const RFILog = ({ user }) => {
     borderBottom: '1px solid #f1f5f9', borderRight: '1px solid #f1f5f9',
     whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis',
   };
+  const filterCellStyle = {
+    padding: '4px 6px', background: '#334155', borderRight: '1px solid #475569',
+  };
+  const filterInputStyle = {
+    width: '100%', padding: '4px 6px', fontSize: '0.72rem', borderRadius: '4px',
+    border: '1px solid #475569', background: '#1e293b', color: 'white', minWidth: '90px',
+  };
+
+  // Dropdown filter cell
+  const FilterSelect = ({ col, options }) => (
+    <th style={filterCellStyle}>
+      <select value={colFilters[col]} onChange={e => setColFilter(col, e.target.value)} style={filterInputStyle}>
+        <option value="">All</option>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </th>
+  );
+  // Text-search filter cell
+  const FilterText = ({ col }) => (
+    <th style={filterCellStyle}>
+      <input type="text" value={colFilters[col]} onChange={e => setColFilter(col, e.target.value)} placeholder="Search…" style={filterInputStyle} />
+    </th>
+  );
+  const FilterBlank = () => <th style={filterCellStyle}></th>;
 
   return (
     <div className="page-container">
@@ -151,17 +211,18 @@ const RFILog = ({ user }) => {
         </button>
       </div>
 
-      {/* Filters */}
+      {/* Top-level controls */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
         <select value={selectedProject} onChange={e => setSelectedProject(e.target.value)} className="form-control" style={{ width: 'auto', minWidth: '200px', fontSize: '0.875rem' }}>
           <option value="">All Projects</option>
           {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="form-control" style={{ width: 'auto', fontSize: '0.875rem' }}>
-          <option value="">All Types</option>
-          <option value="Mechanical">Mechanical</option>
-          <option value="Electrical">Electrical</option>
-        </select>
+        {hasActiveFilters && (
+          <button onClick={() => { clearFilters(); setSelectedProject(''); }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+            <X size={14} /> Clear Filters
+          </button>
+        )}
         <span style={{ fontSize: '0.8rem', color: '#64748b', marginLeft: 'auto' }}>
           {filtered.length} RFI{filtered.length !== 1 ? 's' : ''}
         </span>
@@ -175,7 +236,7 @@ const RFILog = ({ user }) => {
               <strong>LAMBERT ELECTROMEC</strong> — Request For Inspection Log
             </div>
             <div style={{ textAlign: 'right', fontSize: '0.75rem', color: '#94a3b8' }}>
-              LEM-QLT-{typeFilter === 'Electrical' ? 'ELEC' : 'MECH'}-L01 · EDITION 1
+              LEM-QLT-{colFilters.type === 'Electrical' ? 'ELEC' : 'MECH'}-L01 · EDITION 1
             </div>
           </div>
           <div style={{ display: 'flex', gap: '32px', marginTop: '8px', fontSize: '0.75rem', color: '#cbd5e1', flexWrap: 'wrap' }}>
@@ -189,21 +250,18 @@ const RFILog = ({ user }) => {
       {/* Table */}
       {loading ? (
         <div className="loading-container"><div className="spinner"></div></div>
-      ) : filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8', background: 'white', border: '1px solid #e2e8f0', borderRadius: selectedProjectData ? '0 0 8px 8px' : '8px' }}>
-          <FileSpreadsheet size={40} style={{ marginBottom: '12px', opacity: 0.4 }} />
-          <p style={{ fontWeight: 600, color: '#64748b' }}>No RFIs found</p>
-        </div>
       ) : (
         <div style={{ overflowX: 'auto', borderRadius: selectedProjectData ? '0 0 8px 8px' : '8px', border: '1px solid #e2e8f0', borderTop: selectedProjectData ? 'none' : '1px solid #e2e8f0' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', minWidth: '1200px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', background: 'white', minWidth: '1500px' }}>
             <thead>
               <tr>
                 <th style={thStyle}>RFI REF#</th>
+                <th style={thStyle}>Type</th>
                 <th style={thStyle}>Phase of Work</th>
                 <th style={thStyle}>T&C Level</th>
-                <th style={thStyle}>System</th>
+                <th style={thStyle}>Main MEPF System</th>
                 <th style={thStyle}>Sub-System</th>
+                <th style={thStyle}>Specific Component</th>
                 <th style={thStyle}>Drawing No.</th>
                 <th style={thStyle}>As-Built</th>
                 <th style={{ ...thStyle, maxWidth: '250px' }}>Description</th>
@@ -214,9 +272,35 @@ const RFILog = ({ user }) => {
                 <th style={thStyle}>Reply Date</th>
                 <th style={{ ...thStyle, borderRight: 'none' }}>Revision</th>
               </tr>
+              {/* Per-column filter row */}
+              <tr>
+                <FilterBlank />
+                <FilterSelect col="type" options={distinct.type} />
+                <FilterSelect col="phase_of_work" options={distinct.phase_of_work} />
+                <FilterSelect col="tc_level" options={distinct.tc_level} />
+                <FilterSelect col="system" options={distinct.system} />
+                <FilterSelect col="sub_system" options={distinct.sub_system} />
+                <FilterSelect col="component" options={distinct.component} />
+                <FilterBlank />
+                <FilterSelect col="as_built" options={['YES', 'NO']} />
+                <FilterBlank />
+                <FilterText col="floor" />
+                <FilterText col="location" />
+                <FilterBlank />
+                <FilterSelect col="status" options={Object.keys(STATUS_META)} />
+                <FilterBlank />
+                <FilterBlank />
+              </tr>
             </thead>
             <tbody>
-              {filtered.map((rfi, idx) => {
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={16} style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8' }}>
+                    <FileSpreadsheet size={40} style={{ marginBottom: '12px', opacity: 0.4 }} />
+                    <p style={{ fontWeight: 600, color: '#64748b', margin: 0 }}>No RFIs match the current filters</p>
+                  </td>
+                </tr>
+              ) : filtered.map((rfi, idx) => {
                 const statusMeta = STATUS_META[rfi.status] || { label: rfi.status, color: '#64748b' };
                 return (
                   <tr
@@ -227,10 +311,12 @@ const RFILog = ({ user }) => {
                     onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 0 ? 'white' : '#f8fafc'}
                   >
                     <td style={{ ...tdStyle, fontWeight: 700, color: '#1e293b' }}>{rfi.rfi_number || `RFI-${rfi.id}`}</td>
+                    <td style={tdStyle}>{rfi.type || '—'}</td>
                     <td style={tdStyle}>{rfi.phase_of_work || '—'}</td>
                     <td style={tdStyle}>{rfi.tc_level || '—'}</td>
                     <td style={tdStyle}>{rfi.system || '—'}</td>
                     <td style={tdStyle}>{rfi.sub_system || '—'}</td>
+                    <td style={tdStyle}>{rfi.component || '—'}</td>
                     <td style={tdStyle}>{rfi.drawing_no || '—'}</td>
                     <td style={{ ...tdStyle, textAlign: 'center' }}>
                       <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, background: rfi.as_built ? '#f0fdf4' : '#f1f5f9', color: rfi.as_built ? '#10b981' : '#64748b' }}>
