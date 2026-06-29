@@ -217,11 +217,6 @@ const RFIDetail = ({ user }) => {
                 Cycle {rfi.cycle}
               </span>
             )}
-            {rfi.ncr_triggered && (
-              <span style={{ padding: '3px 9px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}>
-                NCR Issued
-              </span>
-            )}
           </div>
           <h1 style={{ margin: '0 0 4px', fontSize: '1.4rem', color: '#1e293b' }}>
             {rfi.rfi_number || `RFI #${rfi.id}`}
@@ -238,8 +233,9 @@ const RFIDetail = ({ user }) => {
           <Row label="Type"            value={rfi.type} />
           <Row label="Phase of Work"   value={rfi.phase_of_work} />
           <Row label="T&C Level"       value={rfi.tc_level} />
-          <Row label="System"          value={rfi.system} />
+          <Row label="Main MEPF System" value={rfi.system} />
           <Row label="Sub-System"      value={rfi.sub_system} />
+          <Row label="Specific Component" value={rfi.component} />
           <Row label="Drawing No."     value={rfi.drawing_no} />
           <Row label="As-Built"        value={rfi.as_built ? 'Yes' : 'No'} />
           <Row label="Floor"           value={rfi.floor} />
@@ -304,14 +300,6 @@ const RFIDetail = ({ user }) => {
               ))}
             </div>
           </Section>
-        )}
-
-        {/* NCR notice */}
-        {rfi.ncr_triggered && (
-          <div style={{ padding: '14px 18px', background: '#fef2f2', border: '1px solid #fca5a5', borderLeft: '4px solid #ef4444', borderRadius: '8px', marginTop: '16px' }}>
-            <p style={{ fontWeight: 700, color: '#dc2626', margin: '0 0 4px' }}>⚠ Non-Conformity Report (NCR) Issued</p>
-            <p style={{ fontSize: '0.875rem', color: '#7f1d1d', margin: 0 }}>A CAPA has been automatically created. View it in the CAPA module.</p>
-          </div>
         )}
 
         {/* Resubmit panel */}
@@ -413,7 +401,7 @@ const RFIDetail = ({ user }) => {
                   { key: 'approved',                       label: '✓ Approved',                             color: '#10b981', desc: 'Installation meets all QC requirements.' },
                   { key: 'approved_commented_no_resubmit', label: '✓ Approved with Comments (No Resubmit)', color: '#0ea5e9', desc: 'Approved with minor comments. No resubmission needed.' },
                   { key: 'approved_commented_resubmit',    label: '↻ Approved with Comments (Resubmit)',    color: '#f59e0b', desc: 'Approved conditionally. Initiator must resubmit.' },
-                  { key: 'rejected',                       label: '✗ Rejected — Issue NCR',                 color: '#dc2626', desc: 'Non-conformity detected. A CAPA will be auto-created.' },
+                  { key: 'rejected',                       label: '✗ Rejected',                             color: '#dc2626', desc: 'Installation does not meet QC requirements.' },
                 ].map(opt => (
                   <div key={opt.key} onClick={() => setQcStatus(opt.key)}
                     style={{ padding: '12px 16px', borderRadius: '8px', cursor: 'pointer', border: `2px solid ${qcStatus === opt.key ? opt.color : '#e2e8f0'}`, background: qcStatus === opt.key ? opt.color + '10' : 'white', transition: 'all 0.15s' }}>
@@ -434,11 +422,6 @@ const RFIDetail = ({ user }) => {
                 {submittingQC ? 'Submitting...' : 'Submit QC Review'}
               </button>
             </div>
-            {qcStatus === 'rejected' && (
-              <p style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '8px', textAlign: 'center' }}>
-                ⚠ Submitting as Rejected will automatically create a CAPA/NCR.
-              </p>
-            )}
           </div>
         )}
       </div>
