@@ -67,6 +67,7 @@ const RFILog = ({ user }) => {
       system: uniq('system'),
       sub_system: uniq('sub_system'),
       component: uniq('component'),
+      floor: uniq('floor'),
     };
   }, [rfis]);
 
@@ -83,7 +84,7 @@ const RFILog = ({ user }) => {
       const ab = r.as_built ? 'YES' : 'NO';
       if (ab !== colFilters.as_built) return false;
     }
-    if (colFilters.floor && !String(r.floor || '').toLowerCase().includes(colFilters.floor.toLowerCase())) return false;
+    if (colFilters.floor && r.floor !== colFilters.floor) return false;
     if (colFilters.location && !String(r.location || '').toLowerCase().includes(colFilters.location.toLowerCase())) return false;
     return true;
   });
@@ -284,7 +285,7 @@ const RFILog = ({ user }) => {
                 <FilterBlank />
                 <FilterSelect col="as_built" options={['YES', 'NO']} />
                 <FilterBlank />
-                <FilterText col="floor" />
+                <FilterSelect col="floor" options={distinct.floor} />
                 <FilterText col="location" />
                 <FilterBlank />
                 <FilterSelect col="status" options={Object.keys(STATUS_META)} />
