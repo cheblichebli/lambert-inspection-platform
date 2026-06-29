@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { rfiAPI, usersAPI, projectsAPI, uploadAPI } from '../api';
+import { getMainSystems, getSubSystems, getComponents } from '../mepfSystems';
 import { ArrowLeft, Upload, X, FileText, ExternalLink } from 'lucide-react';
 
 const PHASES = [
@@ -9,10 +10,6 @@ const PHASES = [
 ];
 const TC_LEVELS = ['L0', 'L1', 'L2a', 'L2b', 'L3a', 'L3b', 'L4', 'L5'];
 const TYPES = ['Mechanical', 'Electrical'];
-const SYSTEMS = {
-  Mechanical: ['HVAC', 'Plumbing', 'Fire Fighting', 'VRV System', 'Mechanical', 'Other'],
-  Electrical: ['Power', 'Lighting', 'ELV', 'Lightning', 'Earthing', 'BMS', 'Other'],
-};
 
 // Shared accepted file types across all upload sections:
 // PDF, JPEG, PNG, Word (.doc/.docx), Excel (.xls/.xlsx)
@@ -96,8 +93,8 @@ const RFIForm = ({ user }) => {
   const isEdit = Boolean(id);
 
   const [form, setForm] = useState({
-    type: '', phase_of_work: '', tc_level: '', system: '', sub_system: '',
-    drawing_no: '', as_built: false, floor: '', location: '', coordinates: '',
+    type: '', phase_of_work: '', tc_level: '', system: '', sub_system: '', component: '',
+    drawing_no: '', as_built: '', floor: '', location: '', coordinates: '',
     description: '', assigned_to: '', project_id: '',
   });
   const [testResultFiles, setTestResultFiles] = useState([]);
@@ -122,8 +119,9 @@ const RFIForm = ({ user }) => {
           tc_level: data.tc_level || '',
           system: data.system || '',
           sub_system: data.sub_system || '',
+          component: data.component || '',
           drawing_no: data.drawing_no || '',
-          as_built: data.as_built || false,
+          as_built: data.as_built === true ? 'Yes' : data.as_built === false ? 'No' : '',
           floor: data.floor || '',
           location: data.location || '',
           coordinates: data.coordinates || '',
@@ -132,7 +130,6 @@ const RFIForm = ({ user }) => {
           project_id: data.project_id || '',
         });
         setTestResultFiles(Array.isArray(data.test_result_files) ? data.test_result_files : []);
-        // Migrate legacy single drawing into the multi-file array for display
         let df = Array.isArray(data.drawing_files) ? data.drawing_files : [];
         if (df.length === 0 && data.drawing_data) {
           df = [{ filename: data.drawing_filename || 'Drawing', url: data.drawing_data }];
@@ -145,12 +142,25 @@ const RFIForm = ({ user }) => {
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
+  // Cascading resets: changing a level clears everything below it
+  const onTypeChange = (val) => setForm(f => ({ ...f, type: val, system: '', sub_system: '', component: '' }));
+  const onSystemChange = (val) => setForm(f => ({ ...f, system: val, sub_system: '', component: '' }));
+  const onSubSystemChange = (val) => setForm(f => ({ ...f, sub_system: val, component: '' }));
+
   const validate = () => {
     const e = {};
+    if (!form.project_id) e.project_id = 'Required';
     if (!form.type) e.type = 'Required';
     if (!form.phase_of_work) e.phase_of_work = 'Required';
+    if (!form.tc_level) e.tc_level = 'Required';
+    if (!form.system) e.system = 'Required';
+    if (!form.sub_system) e.sub_system = 'Required';
+    if (!form.component) e.component = 'Required';
+    if (!form.as_built) e.as_built = 'Required';
+    if (!form.floor) e.floor = 'Required';
+    if (!form.location) e.location = 'Required';
+    if (!form.coordinates) e.coordinates = 'Required';
     if (!form.description) e.description = 'Required';
-    if (!form.project_id) e.project_id = 'Required';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -161,6 +171,7 @@ const RFIForm = ({ user }) => {
     try {
       const payload = {
         ...form,
+        as_built: form.as_built === 'Yes',
         test_result_files: testResultFiles,
         drawing_files: drawingFiles,
         assigned_to: form.assigned_to ? parseInt(form.assigned_to) : null,
@@ -188,7 +199,10 @@ const RFIForm = ({ user }) => {
   if (loading) return <div className="loading-container"><div className="spinner"></div></div>;
 
   const qcEngineers = users.filter(u => ['admin', 'supervisor'].includes(u.role));
-  const systemOptions = SYSTEMS[form.type] || [];
+  const mainSystemOptions = getMainSystems(form.type);
+  const subSystemOptions = getSubSystems(form.type, form.system);
+  const componentOptions = getComponents(form.type, form.system, form.sub_system);
+
   const labelStyle = { display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#374151', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' };
   const reqStar = <span style={{ color: '#ef4444' }}>*</span>;
   const errStyle = { fontSize: '0.75rem', color: '#dc2626', marginTop: '3px' };
@@ -197,6 +211,7 @@ const RFIForm = ({ user }) => {
       {title}
     </p>
   );
+  const errBorder = (field) => ({ borderColor: errors[field] ? '#ef4444' : undefined });
 
   return (
     <div className="page-container" style={{ maxWidth: '760px' }}>
@@ -219,7 +234,7 @@ const RFIForm = ({ user }) => {
           {sectionHeader('Project')}
           <div>
             <label style={labelStyle}>Project {reqStar}</label>
-            <select value={form.project_id} onChange={e => set('project_id', e.target.value)} className="form-control" style={{ borderColor: errors.project_id ? '#ef4444' : undefined }}>
+            <select value={form.project_id} onChange={e => set('project_id', e.target.value)} className="form-control" style={errBorder('project_id')}>
               <option value="">Select project...</option>
               {projects.filter(p => p.is_active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
@@ -233,7 +248,7 @@ const RFIForm = ({ user }) => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div>
               <label style={labelStyle}>Type {reqStar}</label>
-              <select value={form.type} onChange={e => { set('type', e.target.value); set('system', ''); }} className="form-control" style={{ borderColor: errors.type ? '#ef4444' : undefined }}>
+              <select value={form.type} onChange={e => onTypeChange(e.target.value)} className="form-control" style={errBorder('type')}>
                 <option value="">Select type...</option>
                 {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -241,37 +256,63 @@ const RFIForm = ({ user }) => {
             </div>
             <div>
               <label style={labelStyle}>Phase of Work {reqStar}</label>
-              <select value={form.phase_of_work} onChange={e => set('phase_of_work', e.target.value)} className="form-control" style={{ borderColor: errors.phase_of_work ? '#ef4444' : undefined }}>
+              <select value={form.phase_of_work} onChange={e => set('phase_of_work', e.target.value)} className="form-control" style={errBorder('phase_of_work')}>
                 <option value="">Select phase...</option>
                 {PHASES.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
               {errors.phase_of_work && <p style={errStyle}>{errors.phase_of_work}</p>}
             </div>
             <div>
-              <label style={labelStyle}>T&C Level</label>
-              <select value={form.tc_level} onChange={e => set('tc_level', e.target.value)} className="form-control">
+              <label style={labelStyle}>T&C Level {reqStar}</label>
+              <select value={form.tc_level} onChange={e => set('tc_level', e.target.value)} className="form-control" style={errBorder('tc_level')}>
                 <option value="">Select level...</option>
                 {TC_LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
               </select>
+              {errors.tc_level && <p style={errStyle}>{errors.tc_level}</p>}
             </div>
             <div>
-              <label style={labelStyle}>System</label>
-              <select value={form.system} onChange={e => set('system', e.target.value)} className="form-control" disabled={!form.type}>
-                <option value="">Select system...</option>
-                {systemOptions.map(s => <option key={s} value={s}>{s}</option>)}
+              <label style={labelStyle}>As-Built {reqStar}</label>
+              <select value={form.as_built} onChange={e => set('as_built', e.target.value)} className="form-control" style={errBorder('as_built')}>
+                <option value="">Select...</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
               </select>
+              {errors.as_built && <p style={errStyle}>{errors.as_built}</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* MEPF System Hierarchy */}
+        <div>
+          {sectionHeader('System Classification')}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div>
+              <label style={labelStyle}>Main MEPF System {reqStar}</label>
+              <select value={form.system} onChange={e => onSystemChange(e.target.value)} className="form-control" style={errBorder('system')} disabled={!form.type}>
+                <option value="">{form.type ? 'Select main system...' : 'Select type first'}</option>
+                {mainSystemOptions.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              {errors.system && <p style={errStyle}>{errors.system}</p>}
             </div>
             <div>
-              <label style={labelStyle}>Sub-System</label>
-              <input type="text" value={form.sub_system} onChange={e => set('sub_system', e.target.value)} className="form-control" placeholder="e.g. Condensate Drain, DB-01..." />
+              <label style={labelStyle}>Sub-System Group {reqStar}</label>
+              <select value={form.sub_system} onChange={e => onSubSystemChange(e.target.value)} className="form-control" style={errBorder('sub_system')} disabled={!form.system}>
+                <option value="">{form.system ? 'Select sub-system...' : 'Select main system first'}</option>
+                {subSystemOptions.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              {errors.sub_system && <p style={errStyle}>{errors.sub_system}</p>}
             </div>
-            <div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>Specific Component / Area of Inspection {reqStar}</label>
+              <select value={form.component} onChange={e => set('component', e.target.value)} className="form-control" style={errBorder('component')} disabled={!form.sub_system}>
+                <option value="">{form.sub_system ? 'Select component...' : 'Select sub-system first'}</option>
+                {componentOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              {errors.component && <p style={errStyle}>{errors.component}</p>}
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
               <label style={labelStyle}>Drawing No.</label>
               <input type="text" value={form.drawing_no} onChange={e => set('drawing_no', e.target.value)} className="form-control" placeholder="e.g. QLT-SVA-A-DR-20-2001" />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingTop: '24px' }}>
-              <input type="checkbox" id="as_built" checked={form.as_built} onChange={e => set('as_built', e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#4a9d5f' }} />
-              <label htmlFor="as_built" style={{ ...labelStyle, margin: 0, textTransform: 'none', fontSize: '0.875rem' }}>As-Built</label>
             </div>
           </div>
         </div>
@@ -281,16 +322,19 @@ const RFIForm = ({ user }) => {
           {sectionHeader('Location & Site Details')}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div>
-              <label style={labelStyle}>Floor</label>
-              <input type="text" value={form.floor} onChange={e => set('floor', e.target.value)} className="form-control" placeholder="e.g. Ground Floor, 3rd Floor..." />
+              <label style={labelStyle}>Floor {reqStar}</label>
+              <input type="text" value={form.floor} onChange={e => set('floor', e.target.value)} className="form-control" style={errBorder('floor')} placeholder="e.g. Ground Floor, 3rd Floor..." />
+              {errors.floor && <p style={errStyle}>{errors.floor}</p>}
             </div>
             <div>
-              <label style={labelStyle}>Location</label>
-              <input type="text" value={form.location} onChange={e => set('location', e.target.value)} className="form-control" placeholder="e.g. Left Wing, Zone B..." />
+              <label style={labelStyle}>Location {reqStar}</label>
+              <input type="text" value={form.location} onChange={e => set('location', e.target.value)} className="form-control" style={errBorder('location')} placeholder="e.g. Left Wing, Zone B..." />
+              {errors.location && <p style={errStyle}>{errors.location}</p>}
             </div>
-            <div>
-              <label style={labelStyle}>Grid Reference / Coordinates</label>
-              <input type="text" value={form.coordinates} onChange={e => set('coordinates', e.target.value)} className="form-control" placeholder="e.g. (10-14)/(L-N)" />
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>Grid Reference / Coordinates {reqStar}</label>
+              <input type="text" value={form.coordinates} onChange={e => set('coordinates', e.target.value)} className="form-control" style={errBorder('coordinates')} placeholder="e.g. (10-14)/(L-N)" />
+              {errors.coordinates && <p style={errStyle}>{errors.coordinates}</p>}
             </div>
           </div>
         </div>
@@ -306,7 +350,7 @@ const RFIForm = ({ user }) => {
                 onChange={e => set('description', e.target.value)}
                 className="form-control" rows={4}
                 placeholder="Describe the installation or NDT test that is ready for QC inspection..."
-                style={{ borderColor: errors.description ? '#ef4444' : undefined }}
+                style={errBorder('description')}
               />
               {errors.description && <p style={errStyle}>{errors.description}</p>}
             </div>
